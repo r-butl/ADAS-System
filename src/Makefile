@@ -24,9 +24,16 @@ MAIN_SRC = main.cpp
 MAIN_OBJ = $(BUILD_DIR)/main.o
 $(MAIN_OBJ): $(MAIN_SRC) | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
+	
+# Build car
+CAR_SRC = ./unimplemented/car/carDet.cpp
+CAR_OBJ = $(BUILD_DIR)/carDet.o
+$(CAR_OBJ): $(CAR_SRC) | $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
 
 # Build the executable
-$(SRC_DIR)/adas_app: $(MAIN_OBJ) $(READ_FRAME_OBJ)
+$(SRC_DIR)/adas_app: $(MAIN_OBJ) $(READ_FRAME_OBJ) $(CAR_OBJ)
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 
 # Create build directory if it doesn't exist
