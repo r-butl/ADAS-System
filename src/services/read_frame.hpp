@@ -22,6 +22,11 @@ private:
     bool frameReady;
 };
 
+struct FrameReaderArgs {
+	FrameBuffer* frameBuffer;
+	std::string source;
+};
+
 // Thread function for reading frames
 void* frameReaderThread(void* arg);
 

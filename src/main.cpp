@@ -9,13 +9,20 @@ int main() {
     FrameBuffer frameBuffer(10); // Circular buffer with 10 slots
 
     // Create the frame reader thread
+    FrameReaderArgs args;
+    args.frameBuffer = &frameBuffer;
+    args.source = "./video.mp4";
+
     pthread_t frameReaderThreadID;
-    pthread_create(&frameReaderThreadID, nullptr, frameReaderThread, &frameBuffer);
+    pthread_create(&frameReaderThreadID, nullptr, frameReaderThread, &args);
 
     // Simulate other services grabbing frames
-    for (int i = 0; i < 5; ++i) {
+    for (int i = 0; i < 30; ++i) {
         cv::Mat frame = frameBuffer.getLatestFrame();
+
+	cv::imshow("video", frame);
         std::cout << "Service grabbed a frame of size: " << frame.rows << "x" << frame.cols << std::endl;
+	cv::waitKey(0);
     }
 
     // Wait for the frame reader thread to finish (in a real application, you'd handle this differently)

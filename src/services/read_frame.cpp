@@ -2,6 +2,7 @@
 
 #include "read_frame.hpp"
 #include <iostream>
+#include <string.h>
 
 FrameBuffer::FrameBuffer(size_t size)
     : bufferSize(size), latestIndex(0), frameReady(false) {
@@ -30,13 +31,21 @@ bool FrameBuffer::isFrameAvailable() {
 }
 
 void* frameReaderThread(void* arg) {
-    FrameBuffer* frameBuffer = static_cast<FrameBuffer*>(arg);
-    cv::VideoCapture cap(0); // Open the default camera (or replace with a video file path)
+    FrameReaderArgs* args = static_cast<FrameReaderArgs*>(arg);
+    FrameBuffer* frameBuffer = args->frameBuffer;
 
-    if (!cap.isOpened()) {
-        std::cerr << "Error: Unable to open video source." << std::endl;
-        return nullptr;
-    }
+    cv::VideoCapture cap; // Open the default camera (or replace with a video file path)
+
+   	if (args->source == "0"){
+	   	cap.open(0);
+	} else {
+		cap.open(args->source);
+	}
+
+    	if (!cap.isOpened()) {
+       		std::cerr << "Error: Unable to open video source." << std::endl;
+        	return nullptr;
+    	}
 
     cv::Mat frame;
     while (true) {
