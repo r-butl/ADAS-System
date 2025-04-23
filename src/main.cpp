@@ -1,6 +1,6 @@
 #include <iostream>
 #include <pthread.h>
-#include "read_frame.hpp"
+#include "services/read_frame.hpp"
 
 int main() {
     std::cout << "Starting frame reader service..." << std::endl;
