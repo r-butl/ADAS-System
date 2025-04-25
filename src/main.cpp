@@ -1,38 +1,46 @@
 #include <iostream>
 #include <pthread.h>
 #include "services/read_frame.hpp"
-#include "unimplemented/car/carDet.hpp"
-#include "opencv2/imgcodecs.hpp"
-#include "opencv2/objdetect.hpp"
-#include "opencv2/highgui/highgui.hpp"
-#include "opencv2/imgproc.hpp"
+#include "datastructures/frame_buffer.hpp"
+#include "services/carDet.hpp"
 
 #define ESCAPE_KEY (27)
 
 int main() {
     std::cout << "Starting frame reader service..." << std::endl;
 
-    // Create the frame buffer
-    FrameBuffer frameBuffer(10); // Circular buffer with 10 slots
+    FrameBuffer frameBuffer; // Double buffer
 
-    // Create the frame reader thread
+    FrameReaderArgs args;
+    args.frameBuffer = &frameBuffer;
+    args.source = "../../video.mp4";
+
     pthread_t frameReaderThreadID;
-    pthread_create(&frameReaderThreadID, nullptr, frameReaderThread, &frameBuffer);
-    char winInput;
+    pthread_create(&frameReaderThreadID, nullptr, frameReaderThread, &args);
 
     // Simulate other services grabbing frames
-    //for (int i = 0; i < 5; ++i) {
-      //  cv::Mat frame = frameBuffer.getLatestFrame();
-        //std::cout << "Service grabbed a frame of size: " << frame.rows << "x" << frame.cols << std::endl;
-    //}
+    cv::Mat frame;
+    uint64_t lastFrameVersion = 0;
+    char winInput;
     
-    cv::namedWindow("video_display");
-    while(true){
-    	cv::imshow("video_display", frameBuffer.getLatestFrame());
-      if ((winInput = waitKey(0)) == ESCAPE_KEY)
-      {
-          break;
-      }
+    
+    vector<Rect> test;  // for cars ;;;; testing
+
+    while (true) {
+        bool newFrame = frameBuffer.getLatestFrame(frame, lastFrameVersion);
+
+	if (newFrame && !frame.empty()){
+		lastFrameVersion++;
+		test = carDetection(frame);					// for cars;; testing
+		for(auto& car: test){
+			cv::rectangle(frame, car, Scalar(0,255,0), 2);
+		}								// ==================
+		cv::imshow("video", frame);
+		if ((winInput = waitKey(10)) == ESCAPE_KEY){
+		  break;
+		}
+	}
+	
     }
     cv::destroyWindow("video_display");
     
