@@ -1,7 +1,7 @@
 #include <iostream>
 #include <pthread.h>
 #include "services/read_frame.hpp"
-#include "unimplemented/car/carDet.cpp"
+#include "unimplemented/car/carDet.hpp"
 #include "opencv2/imgcodecs.hpp"
 #include "opencv2/objdetect.hpp"
 #include "opencv2/highgui/highgui.hpp"
@@ -18,6 +18,7 @@ int main() {
     // Create the frame reader thread
     pthread_t frameReaderThreadID;
     pthread_create(&frameReaderThreadID, nullptr, frameReaderThread, &frameBuffer);
+    char winInput;
 
     // Simulate other services grabbing frames
     //for (int i = 0; i < 5; ++i) {
@@ -26,8 +27,13 @@ int main() {
     //}
     
     cv::namedWindow("video_display");
-    cv::imshow("video_display", frameBuffer.getLatestFrame());
-    cv::waitKey();
+    while(true){
+    	cv::imshow("video_display", frameBuffer.getLatestFrame());
+      if ((winInput = waitKey(0)) == ESCAPE_KEY)
+      {
+          break;
+      }
+    }
     cv::destroyWindow("video_display");
     
 

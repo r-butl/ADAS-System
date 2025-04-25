@@ -32,7 +32,7 @@ bool FrameBuffer::isFrameAvailable() {
 void* frameReaderThread(void* arg) {
     FrameBuffer* frameBuffer = static_cast<FrameBuffer*>(arg);
     //cv::VideoCapture cap(0); // Open the default camera (or replace with a video file path)
-    cv::VideoCapture cap("video.mp4"); // hard coded video
+    cv::VideoCapture cap("video.mp4", cv::CAP_FFMPEG); // hard coded video
 
     if (!cap.isOpened()) {
         std::cerr << "Error: Unable to open video source." << std::endl;
