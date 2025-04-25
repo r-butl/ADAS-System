@@ -1,1 +1,5 @@
 *.mp4
+*.AVI
+.vscode
+build/
+unimplemented/
