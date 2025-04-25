@@ -1,6 +1,6 @@
 # Compiler and flags
 CXX = g++
-CXXFLAGS = -std=c++17 -Wall -pthread -I/usr/local/include/opencv4 -I$(SERVICES_DIR) -I$(INCLUDE_DIR) `pkg-config --cflags opencv4`
+CXXFLAGS = -std=c++17 -Wall -pthread -I/usr/include/opencv4 -I$(SERVICES_DIR) -I$(INCLUDE_DIR) `pkg-config --cflags opencv4`
 LDFLAGS = `pkg-config --libs opencv4`
 
 # Directories
