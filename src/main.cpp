@@ -1,28 +1,35 @@
 #include <iostream>
 #include <pthread.h>
 #include "services/read_frame.hpp"
+#include "datastructures/frame_buffer.hpp"
 
 int main() {
     std::cout << "Starting frame reader service..." << std::endl;
 
-    // Create the frame buffer
-    FrameBuffer frameBuffer(10); // Circular buffer with 10 slots
+    FrameBuffer frameBuffer; // Double buffer
 
-    // Create the frame reader thread
     FrameReaderArgs args;
     args.frameBuffer = &frameBuffer;
-    args.source = "./video.mp4";
+    args.source = "../../video.mp4";
 
     pthread_t frameReaderThreadID;
     pthread_create(&frameReaderThreadID, nullptr, frameReaderThread, &args);
 
     // Simulate other services grabbing frames
-    for (int i = 0; i < 30; ++i) {
-        cv::Mat frame = frameBuffer.getLatestFrame();
+    cv::Mat frame;
+    uint64_t lastFrameVersion = 0;
 
-	cv::imshow("video", frame);
-        std::cout << "Service grabbed a frame of size: " << frame.rows << "x" << frame.cols << std::endl;
-	cv::waitKey(0);
+    while (true) {
+        bool newFrame = frameBuffer.getLatestFrame(frame, lastFrameVersion);
+
+	if (newFrame){
+		cv::imshow("video", frame);
+        	std::cout << "Service grabbed a frame of size: " << frame.rows << "x" << frame.cols << std::endl;
+	}else{
+		std::cout << "Frame is old" << std::endl;	
+	}
+	
+	cv::waitKey(1);
     }
 
     // Wait for the frame reader thread to finish (in a real application, you'd handle this differently)

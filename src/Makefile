@@ -1,14 +1,14 @@
 # Compiler and flags
 CXX = g++
-CXXFLAGS = -std=c++17 -Wall -pthread -I/usr/local/include/opencv4 -I$(SERVICES_DIR) -I$(INCLUDE_DIR) `pkg-config --cflags opencv4`
-LDFLAGS = `pkg-config --libs opencv4`
+CXXFLAGS = -std=c++17 -Wall -pthread -I/usr/include/opencv4 -I$(SERVICES_DIR) -I$(INCLUDE_DIR) -I$(DATASTRUCTURES_DIR) $(shell pkg-config --cflags opencv4)
+LDFLAGS = $(shell pkg-config --libs opencv4)
 
 # Directories
 SRC_DIR = .
 SERVICES_DIR = $(SRC_DIR)/services
+DATASTRUCTURES_DIR = $(SRC_DIR)/datastructures
 INCLUDE_DIR = $(SRC_DIR)/include
 BUILD_DIR = $(SRC_DIR)/build
-
 
 # Default target
 all: adas_app
@@ -26,7 +26,7 @@ $(MAIN_OBJ): $(MAIN_SRC) | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 # Build the executable
-$(SRC_DIR)/adas_app: $(MAIN_OBJ) $(READ_FRAME_OBJ)
+$(SRC_DIR)/adas_app: $(MAIN_OBJ) $(READ_FRAME_OBJ) $(FRAME_BUFFER_OBJ)
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 
 # Create build directory if it doesn't exist
