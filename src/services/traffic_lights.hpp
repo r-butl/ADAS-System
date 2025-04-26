@@ -3,8 +3,10 @@
 
 #include <string>
 #include <NvInfer.h>
+#include <NvInferRuntime.h>
 #include "frame_buffer.hpp"
 #include "annotations_buffer.hpp"
+#include <NvInferRuntimeCommon.h>
 
 class Logger : public nvinfer1::ILogger {
     void log(Severity severity, const char* msg) noexcept override {
@@ -19,26 +21,33 @@ class Logger : public nvinfer1::ILogger {
     }
 } gLogger;
 
+struct Detection {
+	float x, y, w, h, conf;
+	int class_id;
+};
 
 class TrafficLights {
 public:
-    TrafficLights(const std::string& enginePath, FrameBuffer* inputBuffer, AnnotationsBuffer* outputBuffer);
+    TrafficLights(const std::string& enginePath);
     ~TrafficLights();
 
     static void* run(void* arg); // Entry point for pthreads
 
-    FrameBuffer* inputBuffer;
-    AnnotationsBuffer* outputBuffer;
-
 private:
-    void inferenceLoop();
-
-    bool newFrame;
-    cv::Mat currentFrame;
-    uint64_t frameVersion;
+    void inferenceLoop(cv::Mat frame);
+    cv::Mat preprocessImage(const cv::Mat& frame, int input_w, int input_h, float* gpu_input);
+    std::vector<Detection> postprocessImage(float* output, int num_detections, float conf_thresh, float nms_thresh);
+    float computeIoU(const Detection& a, const Detection& b);
+   
     std::string enginePath;
     nvinfer1::ICudaEngine* engine;
     nvinfer1::IExecutionContext* context;
+
+    cudaStream_t stream;
+    void* buffers[2]; // input , output
+    int inputIndex, outputIndex;
+    int inputW = 720, inputH = 720;
+    int outputSize = 8400;
 };
 
 #endif // INFERENCE_SERVICE_HPP
