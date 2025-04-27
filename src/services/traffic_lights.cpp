@@ -7,35 +7,64 @@
 #include "traffic_lights.hpp"
 
 #include <NvInfer.h>
+#include "NvOnnxParser.h"
+
+using namespace nvonnxparser;
 using namespace nvinfer1;
 
-TrafficLights::TrafficLights(const std::string& enginePath)
-    : enginePath(enginePath), engine(nullptr), context(nullptr) {
+class Logger : public nvinfer1::ILogger {
+    void log(Severity severity, const char* msg) noexcept override {
+        switch (severity) {
+        case Severity::kINTERNAL_ERROR: std::cerr << "INTERNAL_ERROR: " << msg << std::endl; break;
+        case Severity::kERROR:         std::cerr << "ERROR: " << msg << std::endl; break;
+        case Severity::kWARNING:       std::cerr << "WARNING: " << msg << std::endl; break;
+        case Severity::kINFO:          std::cout << "INFO: " << msg << std::endl; break;
+        case Severity::kVERBOSE:       std::cout << "VERBOSE: " << msg << std::endl; break;
+        default:                       std::cout << "UNKNOWN: " << msg << std::endl; break;
+        }
+    }
+};
 
+Logger gLogger;
 
-    std::ifstream file(enginePath, std::ios::binary);
-    if (!file) {
-        std::cerr << "Error: Failed to open engine file: " << enginePath << std::endl;
-        return;
+TrafficLights::TrafficLights(const std::string& onnxPath)
+    : enginePath(onnxPath), engine(nullptr), context(nullptr) {
+
+	    // Build the engine
+    IBuilder* builder = createInferBuilder(gLogger);
+    INetworkDefinition* network = builder->createNetworkV2(0);
+
+    	// Parse onnx model
+    IParser* parser = createParser(*network, gLogger);
+    parser->parseFromFile(onnxPath.c_str(),
+		    static_cast<int32_t>(ILogger::Severity::kWARNING));
+
+    for (int32_t i = 0; i < parser->getNbErrors(); ++i){
+	std::cout << parser->getError(i)->desc() << std::endl;
     }
 
-    file.seekg(0, std::ifstream::end);
-    size_t size = file.tellg();
-    file.seekg(0, std::ifstream::beg);
 
-    std::vector<char> engineData(size);
-    file.read(engineData.data(), size);
-    file.close();
+    // Builder config
+    IBuilderConfig* config = builder->createBuilderConfig();
+    config->setMemoryPoolLimit(MemoryPoolType::kWORKSPACE, 400U << 20);
+    config->setMemoryPoolLimit(MemoryPoolType::kTACTIC_SHARED_MEMORY, 64U << 10);
 
+    // Build deserialized engine
+    IHostMemory* serializedModel = builder->buildSerializedNetwork(*network, *config);
+
+    delete parser;
+    delete network;
+    delete config;
+    delete builder;
+
+    	// Runtime
     IRuntime* runtime = createInferRuntime(gLogger);
     if (!runtime) {
         std::cerr << "Error: Failed to create TensorRT runtime" << std::endl;
         return;
     }
 
-    engine = runtime->deserializeCudaEngine(engineData.data(), size);
-    if (runtime) delete runtime;
-
+    engine = runtime->deserializeCudaEngine(serializedModel->data(), serializedModel->size());
     if (!engine) {
         std::cerr << "Error: Failed to deserialize engine" << std::endl;
         return;
@@ -46,21 +75,8 @@ TrafficLights::TrafficLights(const std::string& enginePath)
         std::cerr << "Error: Failed to create execution context" << std::endl;
     }
 
-    /*
-    int nbBindings = engine->getNbBindings();
-    for (int i = 0; i < nbBindings; ++i){
-	std::cout << "Binding " << i << ": " << engine->getBindingName(i) << std::endl;
-    }
-
-    inputIndex = engine->getBindingIndex("images");
-    outputIndex = engine->getBindingIndex("output0");
-
-    cudaMalloc(&buffers[inputIndex], 3 * inputW * inputH * sizeof(float));
-    cudaMalloc(&buffers[outputIndex], outputSize * 9 * sizeof(float));
-
-    cudaStreamCreate(&stream);
-    */
-
+    delete serializedModel;
+    delete runtime;
 }
 
 TrafficLights::~TrafficLights() {
@@ -143,9 +159,6 @@ float TrafficLights::computeIoU(const Detection& a, const Detection& b){
 void TrafficLights::inferenceLoop(cv::Mat frame) {
     	std::cout << "Running inference loop..." << std::endl;
 
-	cv::cuda::GpuMat gpu_frame;
-      	gpu_frame.upload(frame);
-	
-
+	return;
 }
 

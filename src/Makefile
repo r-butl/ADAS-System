@@ -8,12 +8,13 @@ CXXFLAGS = -std=c++17 -Wall -pthread \
 	   -I$(DATASTRUCTURES_DIR) \
 	   $(shell pkg-config --cflags opencv4) \
 	   -I/usr/local/cuda/include \
-	   -I/usr/local/tensorrt/include
+	   -I/usr/local/tensorrt/include \
+	   -Wno-deprecated-declarations
 
 LDFLAGS = $(shell pkg-config --libs opencv4) \
 	  -L/usr/local/cuda-12/lib64 \
 	  -L/usr/local/tensorrt/lib \
-	  -lcuda -lnvinfer -lnvinfer_plugin
+	  -lcuda -lnvinfer -lnvinfer_plugin -lnvonnxparser
 
 # Directories
 SRC_DIR = .
