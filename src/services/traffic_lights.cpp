@@ -5,14 +5,13 @@
 #include "frame_buffer.hpp"
 #include "annotations_buffer.hpp"
 #include "traffic_lights.hpp"
-#include <NvInfer.h>
-#include <NvInferRuntime.h>
-#include <NvInferRuntimeCommon.h>
 
+#include <NvInfer.h>
 using namespace nvinfer1;
 
 TrafficLights::TrafficLights(const std::string& enginePath)
     : enginePath(enginePath), engine(nullptr), context(nullptr) {
+
 
     std::ifstream file(enginePath, std::ios::binary);
     if (!file) {
@@ -23,6 +22,7 @@ TrafficLights::TrafficLights(const std::string& enginePath)
     file.seekg(0, std::ifstream::end);
     size_t size = file.tellg();
     file.seekg(0, std::ifstream::beg);
+
     std::vector<char> engineData(size);
     file.read(engineData.data(), size);
     file.close();
@@ -46,6 +46,7 @@ TrafficLights::TrafficLights(const std::string& enginePath)
         std::cerr << "Error: Failed to create execution context" << std::endl;
     }
 
+    /*
     int nbBindings = engine->getNbBindings();
     for (int i = 0; i < nbBindings; ++i){
 	std::cout << "Binding " << i << ": " << engine->getBindingName(i) << std::endl;
@@ -58,6 +59,7 @@ TrafficLights::TrafficLights(const std::string& enginePath)
     cudaMalloc(&buffers[outputIndex], outputSize * 9 * sizeof(float));
 
     cudaStreamCreate(&stream);
+    */
 
 }
 

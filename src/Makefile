@@ -3,16 +3,16 @@ CXX = g++
 
 CXXFLAGS = -std=c++17 -Wall -pthread \
 	   -I/usr/include/opencv4 \
-	   -I/usr/include/aarch64-linux-gnu \
 	   -I$(SERVICES_DIR) \
 	   -I$(INCLUDE_DIR) \
 	   -I$(DATASTRUCTURES_DIR) \
 	   $(shell pkg-config --cflags opencv4) \
-	   -I/usr/local/cuda/include
+	   -I/usr/local/cuda/include \
+	   -I/usr/local/tensorrt/include
 
 LDFLAGS = $(shell pkg-config --libs opencv4) \
-	  -L/usr/lib/aarch64-linux-gnu \
 	  -L/usr/local/cuda-12/lib64 \
+	  -L/usr/local/tensorrt/lib \
 	  -lcuda -lnvinfer -lnvinfer_plugin
 
 # Directories
