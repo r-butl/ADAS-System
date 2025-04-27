@@ -2,11 +2,11 @@
 #define TRAFFIC_LIGHTS_HPP
 
 #include <string>
-#include <NvInfer.h>
-#include <NvInferRuntime.h>
 #include "frame_buffer.hpp"
 #include "annotations_buffer.hpp"
-#include <NvInferRuntimeCommon.h>
+
+#include <NvInfer.h>
+using namespace nvinfer1;
 
 class Logger : public nvinfer1::ILogger {
     void log(Severity severity, const char* msg) noexcept override {
