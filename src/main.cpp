@@ -3,6 +3,8 @@
 #include "services/read_frame.hpp"
 #include "datastructures/frame_buffer.hpp"
 #include "services/carDet.hpp"
+#include "services/traffic_lights.hpp"
+#include <string>
 
 #define ESCAPE_KEY (27)
 
@@ -14,6 +16,9 @@ int main() {
     FrameReaderArgs args;
     args.frameBuffer = &frameBuffer;
     args.source = "../../video.mp4";
+
+    std::string engine_path = "./services/tl_detect.onnx";
+    TrafficLights trafficLights(engine_path);
 
     pthread_t frameReaderThreadID;
     pthread_create(&frameReaderThreadID, nullptr, frameReaderThread, &args);

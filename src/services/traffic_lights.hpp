@@ -8,19 +8,6 @@
 #include <NvInfer.h>
 using namespace nvinfer1;
 
-class Logger : public nvinfer1::ILogger {
-    void log(Severity severity, const char* msg) noexcept override {
-        switch (severity) {
-        case Severity::kINTERNAL_ERROR: std::cerr << "INTERNAL_ERROR: " << msg << std::endl; break;
-        case Severity::kERROR:         std::cerr << "ERROR: " << msg << std::endl; break;
-        case Severity::kWARNING:       std::cerr << "WARNING: " << msg << std::endl; break;
-        case Severity::kINFO:          std::cout << "INFO: " << msg << std::endl; break;
-        case Severity::kVERBOSE:       std::cout << "VERBOSE: " << msg << std::endl; break;
-        default:                       std::cout << "UNKNOWN: " << msg << std::endl; break;
-        }
-    }
-} gLogger;
-
 struct Detection {
 	float x, y, w, h, conf;
 	int class_id;
@@ -28,7 +15,7 @@ struct Detection {
 
 class TrafficLights {
 public:
-    TrafficLights(const std::string& enginePath);
+    TrafficLights(const std::string& onnxPath);
     ~TrafficLights();
 
     static void* run(void* arg); // Entry point for pthreads
