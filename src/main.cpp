@@ -40,6 +40,7 @@ int main() {
         bool newFrame = frameBuffer.getLatestFrame(frame, lastFrameVersion);
 
 	if (newFrame && !frame.empty()){
+		trafficLights.inferenceLoop(frame);
 		lastFrameVersion++;
 		test = carDetection(frame);					// for cars;; testing
 		for(auto& car: test){

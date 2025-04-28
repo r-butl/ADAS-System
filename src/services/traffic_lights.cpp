@@ -5,6 +5,10 @@
 #include "frame_buffer.hpp"
 #include "annotations_buffer.hpp"
 #include "traffic_lights.hpp"
+#include <numeric>
+#include <functional>
+
+#include <cuda_runtime.h>
 
 #include <NvInfer.h>
 #include "NvOnnxParser.h"
@@ -27,56 +31,115 @@ class Logger : public nvinfer1::ILogger {
 
 Logger gLogger;
 
+void TrafficLights::saveEngine(const std::string& filePath, IHostMemory* serializedModel) {
+
+	std::ofstream outFile(filePath, std::ios::binary);
+	if (!outFile) {
+		std::cerr << "Error: failed to open file for saving the engine." << std::endl;
+		return;
+	}
+
+	outFile.write(reinterpret_cast<char*>(serializedModel->data()), serializedModel->size());
+	outFile.close();
+
+	std::cout << "Engine saved to: " << filePath << std::endl;
+}
+
+bool TrafficLights::loadEngine(const std::string& filePath){
+
+	std::ifstream inFile(filePath, std::ios::binary);
+	if (!inFile) {
+		std::cerr << "Error: Failed to open engine file for loading." << std::endl;
+		return false;
+	}
+
+	// Deserialize the model
+    	inFile.seekg(0, std::ios::end);
+    	size_t modelSize = inFile.tellg();
+    	inFile.seekg(0, std::ios::beg);
+
+    	std::vector<char> modelData(modelSize);
+    	inFile.read(modelData.data(), modelSize);
+    	inFile.close();
+
+	runtime = createInferRuntime(gLogger);
+	if (!runtime) {
+		std::cerr << "Error: failed to create TensorRT runtime." << std::endl;
+		return false;
+	}
+
+	engine = runtime->deserializeCudaEngine(modelData.data(), modelData.size());
+	if (!engine) {
+		std::cerr << "Error: Failed to deserialize engine" << std::endl;
+		return false;
+	}
+
+	context = engine->createExecutionContext();
+	if (!context) {
+		std::cerr << "Engine: failed to create execution context" << std::endl;
+		return false;
+	}
+
+	return true;
+
+}
+
 TrafficLights::TrafficLights(const std::string& onnxPath)
     : enginePath(onnxPath), engine(nullptr), context(nullptr) {
 
+    std::string saveFileName = "tl_detect.engine";
+    if(!loadEngine(saveFileName.c_str())){
 	    // Build the engine
-    IBuilder* builder = createInferBuilder(gLogger);
-    INetworkDefinition* network = builder->createNetworkV2(0);
+    	IBuilder* builder = createInferBuilder(gLogger);
+    	INetworkDefinition* network = builder->createNetworkV2(0);
 
     	// Parse onnx model
-    IParser* parser = createParser(*network, gLogger);
-    parser->parseFromFile(onnxPath.c_str(),
+    	IParser* parser = createParser(*network, gLogger);
+    	parser->parseFromFile(onnxPath.c_str(),
 		    static_cast<int32_t>(ILogger::Severity::kWARNING));
 
-    for (int32_t i = 0; i < parser->getNbErrors(); ++i){
-	std::cout << parser->getError(i)->desc() << std::endl;
-    }
+    	for (int32_t i = 0; i < parser->getNbErrors(); ++i){
+		std::cout << parser->getError(i)->desc() << std::endl;
+    	}
 
 
-    // Builder config
-    IBuilderConfig* config = builder->createBuilderConfig();
-    config->setMemoryPoolLimit(MemoryPoolType::kWORKSPACE, 400U << 20);
-    config->setMemoryPoolLimit(MemoryPoolType::kTACTIC_SHARED_MEMORY, 64U << 10);
+    	// Builder config
+    	IBuilderConfig* config = builder->createBuilderConfig();
+    	config->setMemoryPoolLimit(MemoryPoolType::kWORKSPACE, 400U << 20);
+    	config->setMemoryPoolLimit(MemoryPoolType::kTACTIC_SHARED_MEMORY, 64U << 10);
 
-    // Build deserialized engine
-    IHostMemory* serializedModel = builder->buildSerializedNetwork(*network, *config);
+    	// Build deserialized engine
+    	IHostMemory* serializedModel = builder->buildSerializedNetwork(*network, *config);
 
-    delete parser;
-    delete network;
-    delete config;
-    delete builder;
+    	delete parser;
+    	delete network;
+    	delete config;
+    	delete builder;
 
     	// Runtime
-    IRuntime* runtime = createInferRuntime(gLogger);
-    if (!runtime) {
-        std::cerr << "Error: Failed to create TensorRT runtime" << std::endl;
-        return;
-    }
+    	IRuntime* runtime = createInferRuntime(gLogger);
+    	if (!runtime) {
+        	std::cerr << "Error: Failed to create TensorRT runtime" << std::endl;
+        	return;
+    	}
 
-    engine = runtime->deserializeCudaEngine(serializedModel->data(), serializedModel->size());
-    if (!engine) {
-        std::cerr << "Error: Failed to deserialize engine" << std::endl;
-        return;
-    }
+    	engine = runtime->deserializeCudaEngine(serializedModel->data(), serializedModel->size());
+    	if (!engine) {
+        	std::cerr << "Error: Failed to deserialize engine" << std::endl;
+        	return;
+    	}
 
-    context = engine->createExecutionContext();
-    if (!context) {
-        std::cerr << "Error: Failed to create execution context" << std::endl;
-    }
+    	context = engine->createExecutionContext();
+    	if (!context) {
+        	std::cerr << "Error: Failed to create execution context" << std::endl;
+    	}
+ 
 
-    delete serializedModel;
-    delete runtime;
+	saveEngine(saveFileName.c_str(), serializedModel);
+    	delete serializedModel;
+    	delete runtime;
+	
+	}
 }
 
 TrafficLights::~TrafficLights() {
@@ -84,19 +147,6 @@ TrafficLights::~TrafficLights() {
     if (engine) delete engine;
 }
 
-cv::Mat TrafficLights::preprocessImage(const cv::Mat& frame, int input_w, int input_h, float* gpu_input){
-	cv::Mat resized, rgb, float_img;
-	cv::resize(frame, resized, cv::Size(input_w, input_h));
-	cv::cvtColor(resized, rgb, cv::COLOR_BGR2RGB);
-	rgb.convertTo(float_img, CV_32FC3, 1.0, 255.0);
-
-	std::vector<cv::Mat> chw(3);
-	for (int i = 0; i < 3; i++)
-		chw[i] = cv::Mat(input_h, input_w, CV_32FC1, gpu_input + i * input_h * input_w);
-	cv::split(float_img, chw);
-
-	return resized;
-}
 
 std::vector<Detection> TrafficLights::postprocessImage(float* output, int num_detections, float conf_thresh, float nms_thresh){
 	std::vector<Detection> detections;
@@ -157,8 +207,65 @@ float TrafficLights::computeIoU(const Detection& a, const Detection& b){
 }
 
 void TrafficLights::inferenceLoop(cv::Mat frame) {
-    	std::cout << "Running inference loop..." << std::endl;
 
-	return;
+	// preprocess the image
+        cv::Mat resized, rgb, float_img;
+	int input_w = 720, input_h = 720;
+        cv::resize(frame, resized, cv::Size(input_w, input_h));
+        cv::cvtColor(resized, rgb, cv::COLOR_BGR2RGB);
+        rgb.convertTo(float_img, CV_32FC3, 1.0, 255.0);
+
+	std::vector<float> gpu_input(3 * input_h * input_w);
+	
+	// Reorder the channels
+        std::vector<cv::Mat> chw(3);
+        for (int i = 0; i < 3; i++)
+                chw[i] = cv::Mat(input_h, input_w, CV_32FC1, gpu_input.data() + i * input_h * input_w);
+        cv::split(float_img, chw);
+
+	// Set up the execution context input
+	char const* input_name = "input";
+	assert(engine->getTensorDataType(input_name) == nvinfer1::DataType::kFLOAT);
+	auto input_dims = nvinfer1::Dims4{1, /* channels */ 3, input_h, input_w};
+	context->setInputShape(input_name, input_dims);
+	//	auto input_size = util::getMemorySize(input_dims, sizeof(float));
+	int input_size = std::accumulate(input_dims.d, input_dims.d + input_dims.nbDims, 1, std::multiplies<int>()) * sizeof(int64_t);
+
+	// set up the output context
+	char const* output_name = "output";
+	assert(engine->getTensorDataType(output_name) == nvinfer1::DataType::kINT64);
+	auto output_dims = context->getTensorShape(output_name);
+        //auto output_size = util::getMemorySize(output_dims, sizeof(int64_t));
+	int output_size = std::accumulate(output_dims.d, output_dims.d + output_dims.nbDims, 1, std::multiplies<int>()) * sizeof(int64_t);
+
+	// Allocate memory on the GPU for the operation
+	void* input_mem{nullptr};
+	cudaMalloc(&input_mem, input_size);
+	void* output_mem{nullptr};
+	cudaMalloc(&output_mem, output_size);
+
+	// set up the cuda stream
+	cudaStream_t stream;
+	cudaStreamCreate(&stream);	
+	cudaMemcpyAsync(input_mem, gpu_input.data(), input_size, cudaMemcpyHostToDevice, stream);
+
+	context->setTensorAddress(input_name, input_mem);
+	context->setTensorAddress(output_name, output_mem);
+	bool status = context->enqueueV3(stream);
+	auto output_buffer = std::unique_ptr<int64_t>{new int64_t[output_size]};
+	cudaMemcpyAsync(output_buffer.get(), output_mem, output_size, cudaMemcpyDeviceToHost, stream);
+	cudaStreamSynchronize(stream);
+
+	cudaFree(input_mem);
+	cudaFree(output_mem);
+
+	/*	
+	for (const auto& det: detections) {
+	
+		std::cout << "Detected class " << det.class_id << " with confidence " << det.conf
+			<< " at (" << det.x << ", " << det.y << ", " << det.w << ", " << det.h << ")" << std::endl;
+	}	
+	*/
+
 }
 

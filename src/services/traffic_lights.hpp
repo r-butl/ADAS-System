@@ -20,15 +20,17 @@ public:
 
     static void* run(void* arg); // Entry point for pthreads
 
-private:
     void inferenceLoop(cv::Mat frame);
-    cv::Mat preprocessImage(const cv::Mat& frame, int input_w, int input_h, float* gpu_input);
+private:
     std::vector<Detection> postprocessImage(float* output, int num_detections, float conf_thresh, float nms_thresh);
     float computeIoU(const Detection& a, const Detection& b);
-   
+    void saveEngine(const std::string& filePath, IHostMemory* serializedModel);
+    bool loadEngine(const std::string& filePath);
+
     std::string enginePath;
     nvinfer1::ICudaEngine* engine;
     nvinfer1::IExecutionContext* context;
+    nvinfer1::IRuntime* runtime;
 
     cudaStream_t stream;
     void* buffers[2]; // input , output
