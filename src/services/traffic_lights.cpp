@@ -228,16 +228,15 @@ void TrafficLights::inferenceLoop(cv::Mat frame) {
 	assert(engine->getTensorDataType(input_name) == nvinfer1::DataType::kFLOAT);
 	auto input_dims = nvinfer1::Dims4{1, /* channels */ 3, input_h, input_w};
 	context->setInputShape(input_name, input_dims);
-	//	auto input_size = util::getMemorySize(input_dims, sizeof(float));
-	int input_size = std::accumulate(input_dims.d, input_dims.d + input_dims.nbDims, 1, std::multiplies<int>()) * sizeof(int64_t);
+	int input_size = std::accumulate(input_dims.d, input_dims.d + input_dims.nbDims, 1, std::multiplies<int>()) * sizeof(float);
 
 	// set up the output context
 	char const* output_name = "output0";
-	assert(engine->getTensorDataType(output_name) == nvinfer1::DataType::kINT64);
+	//assert(engine->getTensorDataType(output_name) == nvinfer1::DataType::kINT64);
 	auto output_dims = context->getTensorShape(output_name);
-        //auto output_size = util::getMemorySize(output_dims, sizeof(int64_t));
-	int output_size = std::accumulate(output_dims.d, output_dims.d + output_dims.nbDims, 1, std::multiplies<int>()) * sizeof(int64_t);
+	int output_size = std::accumulate(output_dims.d, output_dims.d + output_dims.nbDims, 1, std::multiplies<int>()) * sizeof(float);
 
+	
 	// Allocate memory on the GPU for the operation
 	void* input_mem{nullptr};
 	cudaMalloc(&input_mem, input_size);
@@ -247,12 +246,14 @@ void TrafficLights::inferenceLoop(cv::Mat frame) {
 	// set up the cuda stream
 	cudaStream_t stream;
 	cudaStreamCreate(&stream);	
+	std::cout << "Core dumps after this" << std::endl;
 	cudaMemcpyAsync(input_mem, gpu_input.data(), input_size, cudaMemcpyHostToDevice, stream);
 
+	// Run the inference
 	context->setTensorAddress(input_name, input_mem);
 	context->setTensorAddress(output_name, output_mem);
 	bool status = context->enqueueV3(stream);
-	auto output_buffer = std::unique_ptr<int64_t>{new int64_t[output_size]};
+	auto output_buffer = std::unique_ptr<float>{new float[output_size]};
 	cudaMemcpyAsync(output_buffer.get(), output_mem, output_size, cudaMemcpyDeviceToHost, stream);
 	cudaStreamSynchronize(stream);
 
