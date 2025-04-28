@@ -210,7 +210,7 @@ void TrafficLights::inferenceLoop(cv::Mat frame) {
 
 	// preprocess the image
         cv::Mat resized, rgb, float_img;
-	int input_w = 720, input_h = 720;
+	int input_w = 736, input_h = 736;
         cv::resize(frame, resized, cv::Size(input_w, input_h));
         cv::cvtColor(resized, rgb, cv::COLOR_BGR2RGB);
         rgb.convertTo(float_img, CV_32FC3, 1.0, 255.0);
@@ -224,7 +224,7 @@ void TrafficLights::inferenceLoop(cv::Mat frame) {
         cv::split(float_img, chw);
 
 	// Set up the execution context input
-	char const* input_name = "input";
+	char const* input_name = "images";
 	assert(engine->getTensorDataType(input_name) == nvinfer1::DataType::kFLOAT);
 	auto input_dims = nvinfer1::Dims4{1, /* channels */ 3, input_h, input_w};
 	context->setInputShape(input_name, input_dims);
@@ -232,7 +232,7 @@ void TrafficLights::inferenceLoop(cv::Mat frame) {
 	int input_size = std::accumulate(input_dims.d, input_dims.d + input_dims.nbDims, 1, std::multiplies<int>()) * sizeof(int64_t);
 
 	// set up the output context
-	char const* output_name = "output";
+	char const* output_name = "output0";
 	assert(engine->getTensorDataType(output_name) == nvinfer1::DataType::kINT64);
 	auto output_dims = context->getTensorShape(output_name);
         //auto output_size = util::getMemorySize(output_dims, sizeof(int64_t));
