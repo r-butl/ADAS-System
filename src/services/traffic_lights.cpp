@@ -246,7 +246,6 @@ void TrafficLights::inferenceLoop(cv::Mat frame) {
 	// set up the cuda stream
 	cudaStream_t stream;
 	cudaStreamCreate(&stream);	
-	std::cout << "Core dumps after this" << std::endl;
 	cudaMemcpyAsync(input_mem, gpu_input.data(), input_size, cudaMemcpyHostToDevice, stream);
 
 	// Run the inference
@@ -260,13 +259,15 @@ void TrafficLights::inferenceLoop(cv::Mat frame) {
 	cudaFree(input_mem);
 	cudaFree(output_mem);
 
-	/*	
+	std::vector<Detection> detections = postprocessImage(output_buffer.get(), 10, 0.3, 0.3);
+
+	
 	for (const auto& det: detections) {
 	
 		std::cout << "Detected class " << det.class_id << " with confidence " << det.conf
 			<< " at (" << det.x << ", " << det.y << ", " << det.w << ", " << det.h << ")" << std::endl;
 	}	
-	*/
+	
 
 }
 
