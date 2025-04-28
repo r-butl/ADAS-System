@@ -13,16 +13,16 @@
 using namespace std;
 using namespace cv;
 
-vector<Rect> carDetection(Mat Frame){
+void carDetection(Mat Frame, vector<Rect> &annotations_buffer){
 
-    vector<Rect> rectList;
+    annotations_buffer.clear();
 
     String cascadename = "./cars.xml";
     CascadeClassifier carCascade;
 
     if (!carCascade.load(cascadename)) {
         cerr << "Error loading cascade";
-        return rectList;
+        return;
     }
     
     int frameHeight = Frame.rows;
@@ -45,6 +45,7 @@ vector<Rect> carDetection(Mat Frame){
             0,
             Size(20, 20)      // Minimum size
         );
+	
 
         for (auto& car : cars) {
             // Filter false positives using aspect ratio and size
@@ -57,10 +58,9 @@ vector<Rect> carDetection(Mat Frame){
             // Offset to place detection in original frame
             car.x += roi.x;
             car.y += roi.y;
-
-            rectList.push_back(car);
+	
+            annotations_buffer.push_back(car);
         }
-     return rectList;
 }
 
 /*
