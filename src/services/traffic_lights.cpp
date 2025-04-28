@@ -133,7 +133,6 @@ TrafficLights::TrafficLights(const std::string& onnxPath)
     	if (!context) {
         	std::cerr << "Error: Failed to create execution context" << std::endl;
     	}
- 
 
 	saveEngine(saveFileName.c_str(), serializedModel);
     	delete serializedModel;
@@ -206,7 +205,8 @@ float TrafficLights::computeIoU(const Detection& a, const Detection& b){
 	return union_area > 0 ? inter_area / union_area : 0.0f;
 }
 
-void TrafficLights::inferenceLoop(cv::Mat frame) {
+void TrafficLights::inferenceLoop(cv::Mat frame, std::vector<Detection> &detections) {
+
 
 	// preprocess the image
         cv::Mat resized, rgb, float_img;
@@ -232,7 +232,7 @@ void TrafficLights::inferenceLoop(cv::Mat frame) {
 
 	// set up the output context
 	char const* output_name = "output0";
-	//assert(engine->getTensorDataType(output_name) == nvinfer1::DataType::kINT64);
+
 	auto output_dims = context->getTensorShape(output_name);
 	int output_size = std::accumulate(output_dims.d, output_dims.d + output_dims.nbDims, 1, std::multiplies<int>()) * sizeof(float);
 
@@ -258,16 +258,9 @@ void TrafficLights::inferenceLoop(cv::Mat frame) {
 
 	cudaFree(input_mem);
 	cudaFree(output_mem);
-
-	std::vector<Detection> detections = postprocessImage(output_buffer.get(), 10, 0.3, 0.3);
-
 	
-	for (const auto& det: detections) {
-	
-		std::cout << "Detected class " << det.class_id << " with confidence " << det.conf
-			<< " at (" << det.x << ", " << det.y << ", " << det.w << ", " << det.h << ")" << std::endl;
-	}	
-	
+	detections.clear();
+	detections = postprocessImage(output_buffer.get(), 10, 0.3, 0.3);
 
 }
 

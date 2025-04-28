@@ -20,7 +20,7 @@ public:
 
     static void* run(void* arg); // Entry point for pthreads
 
-    void inferenceLoop(cv::Mat frame);
+    void inferenceLoop(cv::Mat frame, std::vector<Detection> &detections);
 private:
     std::vector<Detection> postprocessImage(float* output, int num_detections, float conf_thresh, float nms_thresh);
     float computeIoU(const Detection& a, const Detection& b);
