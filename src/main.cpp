@@ -8,7 +8,6 @@
 
 #define ESCAPE_KEY (27)
 
-
 std::vector<cv::Rect> detectionsToRects(const std::vector<Detection>& detections) {
     std::vector<cv::Rect> rects;
     rects.reserve(detections.size()); // reserve memory
@@ -24,13 +23,11 @@ std::vector<cv::Rect> detectionsToRects(const std::vector<Detection>& detections
     return rects;
 }
 
-
 void drawRectangles(cv::Mat& image, const std::vector<cv::Rect>& rects) {
     for (const auto& rect : rects) {
         cv::rectangle(image, rect, cv::Scalar(0, 255, 0), 2); // green boxes, thickness=2
     }
 }
-
 
 int main() {
     std::cout << "Starting frame reader service..." << std::endl;
@@ -74,7 +71,7 @@ int main() {
 	if (newFrame && !frame.empty()){
 		trafficLights.inferenceLoop(frame, traffic_lights);
 		lastFrameVersion++;
-		// carDetection(frame, cars);
+		carDetection(frame, cars);
 
 		drawRectangles(frame, cars);
 		drawRectangles(frame, detectionsToRects(traffic_lights));
