@@ -8,6 +8,6 @@
 using namespace std;
 using namespace cv;
 
-void carDetection(Mat Frame, vector<Rect> &annotations_buffer);
+vector<Rect> carDetection(Mat Frame);
 
 #endif 

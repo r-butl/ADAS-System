@@ -4,6 +4,7 @@
 #include "datastructures/frame_buffer.hpp"
 #include "services/carDet.hpp"
 #include "services/traffic_lights.hpp"
+#include "service_wrapper.hpp"
 #include <string>
 
 #define ESCAPE_KEY (27)
@@ -31,42 +32,67 @@ void drawRectangles(cv::Mat& image, const std::vector<cv::Rect>& rects) {
 
 int main() {
     std::cout << "Starting frame reader service..." << std::endl;
+
+    // Global variables
+    cv::Mat currentFrame;
+    uint64_t lastFrameVersion = 0;
+    char winInput;
+    bool stopFlag = false;
     
+	// Annotations buffer
+	std::vector<Rect> vCarAnnotations;
+	std::vector<Detection> vTrafficLightsAnnotations;
+	// pedestrians
+	// lane lines
+
+    // Sequencer flags
+    std::atomic<uint8_t> uFrameReadyFlag(0);
+    std::atomic<uint8_t> uProcessingDoneFlag(0);
+
     // Read frame thread
     FrameBuffer frameBuffer;
 
     FrameReaderArgs args;
     args.frameBuffer = &frameBuffer;
     args.source = "../../video.mp4";
-
     pthread_t frameReaderThreadID;
     pthread_create(&frameReaderThreadID, nullptr, frameReaderThread, &args);
 
-
+    // Traffic lights service
     std::string engine_path = "./services/tl_detect.onnx";
     TrafficLights trafficLights(engine_path);
+    serviceWrapperArgs trafficLightsArgs;
+    trafficLightsArgs.processFunction = &traffic_lights.inferenceLoop;    
+    trafficLightsArgs.frameBuffer = &frameBuffer;
+    trafficLightsArgs.outputStore = &vTrafficLightsAnnotations;
+    trafficLightsArgs.frameReadyFlag = &uFrameReadyFlag;
+    trafficLightsArgs.processingDoneFlag = &uProcessingDoneFlag;
+    trafficLightsArgs.activeBit = 0x01;
+    trafficLightsArgs.stopFlag = &stopFlag;
 
+    pthread_t trafficLightsThreadID;
+    pthread_create(&trafficLightsThreadID, nullptr, ServiceWrapperProcess<Detection>, &trafficLightsArgs);
 
-	// Annotations buffer
-	std::vector<Rect> cars;
-	std::vector<Detection> traffic_lights;
-	// pedestrians
-	// lane lines
-	
-    // Simulate other services grabbing frames
-    cv::Mat frame;
-    uint64_t lastFrameVersion = 0;
-    char winInput;
-    
+    // Car detection service
+    serviceWrapperArgs carDetectionArgs;
+    carDetectionArgs.processFunction = &carDetection;
+    carDetectionArgs.frameBuffer = &frameBuffer;
+    carDetectionArgs.outputStore = &vCarAnnotations;
+    carDetectionArgs.frameReadyFlag = &uFrameReadyFlag;
+    carDetectionArgs.processingDoneFlag = &uProcessingDoneFlag;
+    carDetectionArgs.activeBit = 0x02;
+    carDetectionArgs.stopFlag = &stopFlag;
+
+    pthread_t carDetectionThreadID;
+    pthread_create(&carDetectionThreadID, nullptr, ServiceWrapperProcess<Rect>, &carDetectionArgs);
+
     // fps
     double fps;
     int64 start, end;
     
-    vector<Rect> test;  // for cars ;;;; testing
-
     while (true) {
     start = cv::getTickCount();
-        bool newFrame = frameBuffer.getLatestFrame(frame, lastFrameVersion);
+        bool newFrame = frameBuffer.getLatestFrame(currentFrame, lastFrameVersion);
 
 	if (newFrame && !frame.empty()){
 		trafficLights.inferenceLoop(frame, traffic_lights);
@@ -85,8 +111,6 @@ int main() {
 		if ((winInput = waitKey(10)) == ESCAPE_KEY){
 		  break;
 		}
-		
-		
 		
 	}
 	

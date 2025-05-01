@@ -13,10 +13,9 @@
 using namespace std;
 using namespace cv;
 
-void carDetection(Mat Frame, vector<Rect> &annotations_buffer){
+vector<Rect> carDetection(Mat Frame){
 
-    annotations_buffer.clear();
-
+    vector<Rect> annotations_buffer;
     String cascadename = "./cars.xml";
     CascadeClassifier carCascade;
 
@@ -61,6 +60,8 @@ void carDetection(Mat Frame, vector<Rect> &annotations_buffer){
 	
             annotations_buffer.push_back(car);
         }
+
+    return annotations_buffer;
 }
 
 /*
