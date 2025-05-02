@@ -1,7 +1,7 @@
 # Compiler and flags
 CXX = g++
 
-CXXFLAGS = -std=c++17 -Wall -pthread \
+CXXFLAGS = -std=c++17 -Wall -pthread\
 	   -I/usr/include/opencv4 \
 	   -I$(SERVICES_DIR) \
 	   -I$(INCLUDE_DIR) \
@@ -9,13 +9,13 @@ CXXFLAGS = -std=c++17 -Wall -pthread \
 	   $(shell pkg-config --cflags opencv4) \
 	   -I/usr/local/cuda/include \
 	   -I/usr/local/tensorrt/include \
-	   -Wno-deprecated-declarations \
-	   -pg
+	   -Wno-deprecated-declarations 
 
 LDFLAGS = $(shell pkg-config --libs opencv4) \
 	  -L/usr/local/cuda-12/lib64 \
 	  -L/usr/local/tensorrt/lib \
-	  -lcuda -lnvinfer -lnvinfer_plugin -lnvonnxparser -lcudart
+	  -lcuda -lnvinfer -lnvinfer_plugin -lnvonnxparser -lcudart \
+	  -lpthread -lopencv_core -lopencv_highgui -lopencv_imgproc
 
 # Directories
 SRC_DIR = .

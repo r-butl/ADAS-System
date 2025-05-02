@@ -46,7 +46,7 @@ int main() {
     frameReaderArgs.frameBuffer = &frameBuffer;
     frameReaderArgs.source = "../../video.mp4";
     frameReaderArgs.frameReadyFlag = &uFrameReadyFlag;
-    frameReaderArgs.numServices = 3;                             // CRITICAL: needs to be # of annotation services + 1 draw service
+    frameReaderArgs.numServices = 2;                             // CRITICAL: needs to be # of annotation services + 1 draw service
     frameReaderArgs.stopFlag = &stopFlag;
 
     pthread_t frameReaderThreadID;
@@ -62,26 +62,26 @@ int main() {
     trafficLightsArgs.outputStore = &vTrafficLightsAnnotations;
     trafficLightsArgs.frameReadyFlag = &uFrameReadyFlag;
     trafficLightsArgs.processingDoneFlag = &uProcessingDoneFlag;
-    trafficLightsArgs.activeBit = 0x02;                     // Need to be unique bit for each service   
+    trafficLightsArgs.activeBit = 0x01;                     // Need to be unique bit for each service   
     trafficLightsArgs.stopFlag = &stopFlag;
 
     pthread_t trafficLightsThreadID;
     pthread_create(&trafficLightsThreadID, nullptr, ServiceWrapperThread<Detection>, &trafficLightsArgs);
     setThreadAffinity(trafficLightsThreadID, 1); 
 
-    // Car detection service
-    serviceWrapperArgs<cv::Rect> carDetectionArgs;
-    carDetectionArgs.processFunction = &carDetection;
-    carDetectionArgs.frameBuffer = &frameBuffer;
-    carDetectionArgs.outputStore = &vCarAnnotations;
-    carDetectionArgs.frameReadyFlag = &uFrameReadyFlag;
-    carDetectionArgs.processingDoneFlag = &uProcessingDoneFlag;
-    carDetectionArgs.activeBit = 0x01;                          // Need to be unique bit for each service
-    carDetectionArgs.stopFlag = &stopFlag;
+    // // Car detection service
+    // serviceWrapperArgs<cv::Rect> carDetectionArgs;
+    // carDetectionArgs.processFunction = &carDetection;
+    // carDetectionArgs.frameBuffer = &frameBuffer;
+    // carDetectionArgs.outputStore = &vCarAnnotations;
+    // carDetectionArgs.frameReadyFlag = &uFrameReadyFlag;
+    // carDetectionArgs.processingDoneFlag = &uProcessingDoneFlag;
+    // carDetectionArgs.activeBit = 0x01;                          // Need to be unique bit for each service
+    // carDetectionArgs.stopFlag = &stopFlag;
 
-    pthread_t carDetectionThreadID;
-    pthread_create(&carDetectionThreadID, nullptr, ServiceWrapperThread<cv::Rect>, &carDetectionArgs);
-    setThreadAffinity(carDetectionThreadID, 2);
+    // pthread_t carDetectionThreadID;
+    // pthread_create(&carDetectionThreadID, nullptr, ServiceWrapperThread<cv::Rect>, &carDetectionArgs);
+    // setThreadAffinity(carDetectionThreadID, 2);
 
   // Draw frame service
     DrawFrameArgs drawFrameArgs;
@@ -89,9 +89,10 @@ int main() {
     drawFrameArgs.windowName = "Annotated Frame";
     drawFrameArgs.frameReadyFlag = &uFrameReadyFlag;
     drawFrameArgs.processingDoneFlag = &uProcessingDoneFlag;
-    drawFrameArgs.activeBit = 0x04;                     // Need to be unique bit for each service    
-    drawFrameArgs.numServices = 2;                              // CRITICAL: needs to be # of annotation services
+    drawFrameArgs.activeBit = 0x02;                     // Need to be unique bit for each service    
+    drawFrameArgs.numServices = 1;                              // CRITICAL: needs to be # of annotation services
     drawFrameArgs.stopFlag = &stopFlag;
+    drawFrameArgs.trafficLights = &vTrafficLightsAnnotations;
 
     pthread_t drawFrameThreadID;
     pthread_create(&drawFrameThreadID, nullptr, DrawFrameThread, &drawFrameArgs);
@@ -105,7 +106,7 @@ int main() {
     // Wait for the frame reader thread to finish (in a real application, you'd handle this differently)
     pthread_join(frameReaderThreadID, nullptr);
     pthread_join(trafficLightsThreadID, nullptr);
-    pthread_join(carDetectionThreadID, nullptr);
+    //pthread_join(carDetectionThreadID, nullptr);
     pthread_join(drawFrameThreadID, nullptr);
 
     return 0;

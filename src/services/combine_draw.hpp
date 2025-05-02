@@ -11,6 +11,7 @@
 #include <vector>
 #include <thread>
 #include <chrono>
+#include <traffic_lights.hpp>
 
 // Thread function for reading frames
 void* drawFrameThread(void* arg);
@@ -23,7 +24,7 @@ struct DrawFrameArgs {
     uint8_t activeBit;
     int numServices;
     std::atomic<bool>* stopFlag;
-
+    std::vector<Detection>* trafficLights;
 };
 
 void* DrawFrameThread(void* arg) {
@@ -63,13 +64,15 @@ void* DrawFrameThread(void* arg) {
             //std::this_thread::sleep_for(std::chrono::milliseconds(1)); // Sleep for 1 ms
         }
 
-        // Pull in annoations
+        // Draw traffic lights annotations
+        for (const auto& annotation : *args->trafficLights) {
+            cv::rectangle(frame, cv::Point(annotation.x, annotation.y), 
+                          cv::Point(annotation.x + annotation.w, annotation.y + annotation.h), 
+                          cv::Scalar(0, 255, 0), 2); // green boxes, thickness=2
+        }
 
         // Flip the processingDoneFlag to 0
         processingDoneFlag->store(0);
-
-        // Draw rectangles on the frame (example)
-
 
         // Calculate FPS
         auto currentTime = std::chrono::high_resolution_clock::now();
