@@ -6,6 +6,8 @@
 #include <opencv2/opencv.hpp>
 #include <sched.h>
 #include <atomic>
+#include <thread>
+#include <chrono>
 
 // Thread function for reading frames
 void* frameReaderThread(void* arg);
@@ -43,19 +45,27 @@ void* frameReaderThread(void* arg) {
                 return nullptr;
         }
 
+        std::cout << "Read frame service is alive." << std::endl;
         cv::Mat frame;
         while (!args->stopFlag->load()){
                 
                 cap >> frame; // Capture a frame
                 if (frame.empty()) {
-                std::cerr << "Error: Empty frame captured." << std::endl;
-                continue;
+                        std::cerr << "Error: Empty frame captured." << std::endl;
+                        continue;
                 }
+
+                std::cout << "Frame captured. Waiting to write to the buffer." << std::endl;
 
                 // Check if all frameReadyFlags are 0
                 while ((frameReadyFlag->load() & bitmask) != 0) {
-                sched_yield(); // Yield the CPU to other threads
+                        //sched_yield(); // Yield the CPU to other threads
+                        printf("Frame Ready Flag: %d\n", frameReadyFlag->load());
+                        std::this_thread::sleep_for(std::chrono::milliseconds(1));
                 }
+
+                std::cout << "Writing frame." << std::endl;
+                std::cout.flush();
 
                 // Copy the frame to the frame buffer
                 frame.copyTo(*frameBuffer);
@@ -63,6 +73,8 @@ void* frameReaderThread(void* arg) {
                 // Set the frameReadyFlag to indicate that a new frame is ready
                 frameReadyFlag->fetch_or(bitmask);
         }
+
+        std::cout << "Read frame service is stopping." << std::endl;
 
         cap.release();
         return nullptr;

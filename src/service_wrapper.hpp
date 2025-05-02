@@ -6,6 +6,8 @@
 #include <functional>
 #include <atomic>
 #include <sched.h>
+#include <thread>
+#include <chrono>
 
 template <typename T>
 struct serviceWrapperArgs {
@@ -32,13 +34,16 @@ void* ServiceWrapperThread(void* args) {
     cv::Mat localFrame;
 
     while (!stopFlag->load()) {
+
         // Wait for the frameReadyFlag to be set to 1
         while ((frameReadyFlag->load() & activeBit) == 0 && !stopFlag->load()) {
-            sched_yield();
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
 
         // Copy the frame from the frameBuffer to localFrame
         localFrame = *frameBuffer;
+
+        printf("%d: Frame pulled.\n", activeBit);
 
         // Reset the frameReadyFlag to 0
         *frameReadyFlag &= ~activeBit;
@@ -46,10 +51,14 @@ void* ServiceWrapperThread(void* args) {
         // Process the frame
         std::vector<T> result = processFunction(*frameBuffer);
 
+        printf("%d: Finished annotations.\n", activeBit);
+
         // Wait for the processingDoneFlag to be set to 0
         while ((*processingDoneFlag & activeBit) != 0 && !stopFlag->load()) {
-            sched_yield();
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
+
+        printf("%d: Writing annotations.\n", activeBit);
 
         // Write the result to the output store
         *outputStore = result;

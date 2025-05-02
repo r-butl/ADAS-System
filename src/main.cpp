@@ -69,19 +69,7 @@ int main() {
     pthread_t frameReaderThreadID;
     pthread_create(&frameReaderThreadID, nullptr, frameReaderThread, &frameReaderArgs);
 
-    // Draw frame service
-    DrawFrameArgs drawFrameArgs;
-    drawFrameArgs.frameBuffer = &frameBuffer;
-    drawFrameArgs.windowName = "Annotated Frame";
-    drawFrameArgs.frameReadyFlag = &uFrameReadyFlag;
-    drawFrameArgs.processingDoneFlag = &uProcessingDoneFlag;
-    drawFrameArgs.activeBit = 0x01;                     // Need to be unique bit for each service    
-    drawFrameArgs.numServices = 2;                              // CRITICAL: needs to be # of annotation services
-    drawFrameArgs.stopFlag = &stopFlag;
 
-    pthread_t drawFrameThreadID;
-    pthread_create(&drawFrameThreadID, nullptr, DrawFrameThread, &drawFrameArgs);
-    
     // Traffic lights service
     std::string engine_path = "./services/tl_detect.onnx";
     TrafficLights trafficLights(engine_path);
@@ -104,15 +92,28 @@ int main() {
     carDetectionArgs.outputStore = &vCarAnnotations;
     carDetectionArgs.frameReadyFlag = &uFrameReadyFlag;
     carDetectionArgs.processingDoneFlag = &uProcessingDoneFlag;
-    carDetectionArgs.activeBit = 0x04;                          // Need to be unique bit for each service
+    carDetectionArgs.activeBit = 0x01;                          // Need to be unique bit for each service
     carDetectionArgs.stopFlag = &stopFlag;
 
     pthread_t carDetectionThreadID;
     pthread_create(&carDetectionThreadID, nullptr, ServiceWrapperThread<cv::Rect>, &carDetectionArgs);
 
+  // Draw frame service
+    DrawFrameArgs drawFrameArgs;
+    drawFrameArgs.frameBuffer = &frameBuffer;
+    drawFrameArgs.windowName = "Annotated Frame";
+    drawFrameArgs.frameReadyFlag = &uFrameReadyFlag;
+    drawFrameArgs.processingDoneFlag = &uProcessingDoneFlag;
+    drawFrameArgs.activeBit = 0x04;                     // Need to be unique bit for each service    
+    drawFrameArgs.numServices = 2;                              // CRITICAL: needs to be # of annotation services
+    drawFrameArgs.stopFlag = &stopFlag;
+
+    pthread_t drawFrameThreadID;
+    pthread_create(&drawFrameThreadID, nullptr, DrawFrameThread, &drawFrameArgs);
+    
     while (true) {
         continue;
-	
+
     }
 
     // Wait for the frame reader thread to finish (in a real application, you'd handle this differently)

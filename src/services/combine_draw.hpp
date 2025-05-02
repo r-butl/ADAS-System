@@ -9,6 +9,8 @@
 #include <sched.h>
 #include <atomic>
 #include <vector>
+#include <thread>
+#include <chrono>
 
 // Thread function for reading frames
 void* drawFrameThread(void* arg);
@@ -45,20 +47,24 @@ void* DrawFrameThread(void* arg) {
     cv::Mat frame;
     while (!stopFlag->load()) {
 
+
+        std::cout << "Draw: Waiting for frame..." << std::endl;
+        std::cout.flush();
         // Wait for the frameReadyFlag to be set to 1
         while ((frameReadyFlag->load() & activeBit) == 0 && !stopFlag->load()) {
-            sched_yield();
+            std::this_thread::sleep_for(std::chrono::milliseconds(1)); // Sleep for 1 ms
+
         }
 
         // Copy the frame from the frameBuffer to localFrame
         frame = *frameBuffer;
 
-        // Reset the frameReadyFlag to 0
-        frameReadyFlag->fetch_and(~activeBit);
+        std::cout << "Draw: Frame pulled. Waiting for services to finish previous frame." << std::endl;
 
         // Wait for the processingDoneFlag to be set to 0
         while ((*processingDoneFlag & bitmask) != bitmask && !stopFlag->load()) {
-            sched_yield();
+            printf("Processing Done Flag: %d\n", processingDoneFlag->load());
+            std::this_thread::sleep_for(std::chrono::milliseconds(1)); // Sleep for 1 ms
         }
 
         // Pull in annoations
@@ -68,15 +74,22 @@ void* DrawFrameThread(void* arg) {
 
         // Draw rectangles on the frame (example)
 
+        std::cout << "Draw: Drawing." << std::endl;
+
         // Display the frame
         if (!frame.empty()) {
             cv::imshow(windowName, frame);
+        } else {
+            std::cerr << "Error: Empty frame." << std::endl;
         }
 
         // Check for ESC key press
         if (cv::waitKey(10) == ESCAPE_KEY) {
             *stopFlag = true;
         }
+
+        // Reset the frameReadyFlag to 0
+        *frameReadyFlag &= ~activeBit;
     }
 
     cv::destroyWindow(windowName);
