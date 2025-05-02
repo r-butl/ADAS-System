@@ -55,16 +55,16 @@ void* frameReaderThread(void* arg) {
                         continue;
                 }
 
-                std::cout << "Frame captured. Waiting to write to the buffer." << std::endl;
+                //std::cout << "Frame captured. Waiting to write to the buffer." << std::endl;
 
                 // Check if all frameReadyFlags are 0
                 while ((frameReadyFlag->load() & bitmask) != 0) {
                         //sched_yield(); // Yield the CPU to other threads
-                        printf("Frame Ready Flag: %d\n", frameReadyFlag->load());
-                        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                        //printf("Frame Ready Flag: %d\n", frameReadyFlag->load());
+                        //std::this_thread::sleep_for(std::chrono::milliseconds(1));
                 }
 
-                std::cout << "Writing frame." << std::endl;
+                //std::cout << "Writing frame." << std::endl;
                 std::cout.flush();
 
                 // Copy the frame to the frame buffer

@@ -9,35 +9,18 @@
 
 #define ESCAPE_KEY (27)
 
-// template <typename T>
-// void drawAnnotations(cv::Mat& image, const std::vector<T>& annotations) {
-//     for (const auto& annotation : annotations) {
-//         cv::rectangle(image, cv::Point(annotation.x, annotation.y), 
-//                       cv::Point(annotation.x + annotation.w, annotation.y + annotation.h), 
-//                       cv::Scalar(0, 255, 0), 2); // green boxes, thickness=2
-//     }
-// }
+void setThreadAffinity(pthread_t thread, int core_id) {
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);           // Clear the CPU set
+    CPU_SET(core_id, &cpuset);   // Add the desired core to the set
 
-// std::vector<cv::Rect> detectionsToRects(const std::vector<Detection>& detections) {
-//     std::vector<cv::Rect> rects;
-//     rects.reserve(detections.size()); // reserve memory
-
-//     for (const auto& det : detections) {
-//         int x = static_cast<int>(det.x);
-//         int y = static_cast<int>(det.y);
-//         int w = static_cast<int>(det.w);
-//         int h = static_cast<int>(det.h);
-//         rects.emplace_back(x, y, w, h);
-//     }
-
-//     return rects;
-// }
-
-// void drawRectangles(cv::Mat& image, const std::vector<cv::Rect>& rects) {
-//     for (const auto& rect : rects) {
-//         cv::rectangle(image, rect, cv::Scalar(0, 255, 0), 2); // green boxes, thickness=2
-//     }
-// }
+    int result = pthread_setaffinity_np(thread, sizeof(cpu_set_t), &cpuset);
+    if (result != 0) {
+        std::cerr << "Error setting thread affinity: " << strerror(result) << std::endl;
+    } else {
+        std::cout << "Thread bound to core " << core_id << std::endl;
+    }
+}
 
 int main() {
     std::cout << "Starting frame reader service..." << std::endl;
@@ -68,7 +51,7 @@ int main() {
 
     pthread_t frameReaderThreadID;
     pthread_create(&frameReaderThreadID, nullptr, frameReaderThread, &frameReaderArgs);
-
+    setThreadAffinity(frameReaderThreadID, 0); // Bind to core 0
 
     // Traffic lights service
     std::string engine_path = "./services/tl_detect.onnx";
@@ -84,6 +67,7 @@ int main() {
 
     pthread_t trafficLightsThreadID;
     pthread_create(&trafficLightsThreadID, nullptr, ServiceWrapperThread<Detection>, &trafficLightsArgs);
+    setThreadAffinity(trafficLightsThreadID, 0); // Bind to core 0
 
     // Car detection service
     serviceWrapperArgs<cv::Rect> carDetectionArgs;
@@ -97,6 +81,7 @@ int main() {
 
     pthread_t carDetectionThreadID;
     pthread_create(&carDetectionThreadID, nullptr, ServiceWrapperThread<cv::Rect>, &carDetectionArgs);
+    setThreadAffinity(carDetectionThreadID, 0); // Bind to core 0
 
   // Draw frame service
     DrawFrameArgs drawFrameArgs;
@@ -110,7 +95,8 @@ int main() {
 
     pthread_t drawFrameThreadID;
     pthread_create(&drawFrameThreadID, nullptr, DrawFrameThread, &drawFrameArgs);
-    
+    setThreadAffinity(drawFrameThreadID, 0); // Bind to core 0
+
     while (true) {
         continue;
 
@@ -118,6 +104,9 @@ int main() {
 
     // Wait for the frame reader thread to finish (in a real application, you'd handle this differently)
     pthread_join(frameReaderThreadID, nullptr);
+    pthread_join(trafficLightsThreadID, nullptr);
+    pthread_join(carDetectionThreadID, nullptr);
+    pthread_join(drawFrameThreadID, nullptr);
 
     return 0;
 }

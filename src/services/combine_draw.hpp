@@ -48,8 +48,8 @@ void* DrawFrameThread(void* arg) {
     while (!stopFlag->load()) {
 
 
-        std::cout << "Draw: Waiting for frame..." << std::endl;
-        std::cout.flush();
+        //std::cout << "Draw: Waiting for frame..." << std::endl;
+        //std::cout.flush();
         // Wait for the frameReadyFlag to be set to 1
         while ((frameReadyFlag->load() & activeBit) == 0 && !stopFlag->load()) {
             std::this_thread::sleep_for(std::chrono::milliseconds(1)); // Sleep for 1 ms
@@ -58,13 +58,14 @@ void* DrawFrameThread(void* arg) {
 
         // Copy the frame from the frameBuffer to localFrame
         frame = *frameBuffer;
-
-        std::cout << "Draw: Frame pulled. Waiting for services to finish previous frame." << std::endl;
+        // Reset the frameReadyFlag to 0
+        *frameReadyFlag &= ~activeBit;
+        //std::cout << "Draw: Frame pulled. Waiting for services to finish previous frame." << std::endl;
 
         // Wait for the processingDoneFlag to be set to 0
         while ((*processingDoneFlag & bitmask) != bitmask && !stopFlag->load()) {
-            printf("Processing Done Flag: %d\n", processingDoneFlag->load());
-            std::this_thread::sleep_for(std::chrono::milliseconds(1)); // Sleep for 1 ms
+            //printf("Processing Done Flag: %d\n", processingDoneFlag->load());
+            //std::this_thread::sleep_for(std::chrono::milliseconds(1)); // Sleep for 1 ms
         }
 
         // Pull in annoations
@@ -74,7 +75,7 @@ void* DrawFrameThread(void* arg) {
 
         // Draw rectangles on the frame (example)
 
-        std::cout << "Draw: Drawing." << std::endl;
+        //std::cout << "Draw: Drawing." << std::endl;
 
         // Display the frame
         if (!frame.empty()) {
@@ -88,8 +89,7 @@ void* DrawFrameThread(void* arg) {
             *stopFlag = true;
         }
 
-        // Reset the frameReadyFlag to 0
-        *frameReadyFlag &= ~activeBit;
+
     }
 
     cv::destroyWindow(windowName);
@@ -97,3 +97,34 @@ void* DrawFrameThread(void* arg) {
     return nullptr;
 }
 #endif
+
+
+// template <typename T>
+// void drawAnnotations(cv::Mat& image, const std::vector<T>& annotations) {
+//     for (const auto& annotation : annotations) {
+//         cv::rectangle(image, cv::Point(annotation.x, annotation.y), 
+//                       cv::Point(annotation.x + annotation.w, annotation.y + annotation.h), 
+//                       cv::Scalar(0, 255, 0), 2); // green boxes, thickness=2
+//     }
+// }
+
+// std::vector<cv::Rect> detectionsToRects(const std::vector<Detection>& detections) {
+//     std::vector<cv::Rect> rects;
+//     rects.reserve(detections.size()); // reserve memory
+
+//     for (const auto& det : detections) {
+//         int x = static_cast<int>(det.x);
+//         int y = static_cast<int>(det.y);
+//         int w = static_cast<int>(det.w);
+//         int h = static_cast<int>(det.h);
+//         rects.emplace_back(x, y, w, h);
+//     }
+
+//     return rects;
+// }
+
+// void drawRectangles(cv::Mat& image, const std::vector<cv::Rect>& rects) {
+//     for (const auto& rect : rects) {
+//         cv::rectangle(image, rect, cv::Scalar(0, 255, 0), 2); // green boxes, thickness=2
+//     }
+// }

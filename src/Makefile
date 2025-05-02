@@ -10,6 +10,7 @@ CXXFLAGS = -std=c++17 -Wall -pthread \
 	   -I/usr/local/cuda/include \
 	   -I/usr/local/tensorrt/include \
 	   -Wno-deprecated-declarations \
+	   -pg
 
 LDFLAGS = $(shell pkg-config --libs opencv4) \
 	  -L/usr/local/cuda-12/lib64 \
