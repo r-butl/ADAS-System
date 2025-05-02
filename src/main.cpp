@@ -51,7 +51,7 @@ int main() {
 
     pthread_t frameReaderThreadID;
     pthread_create(&frameReaderThreadID, nullptr, frameReaderThread, &frameReaderArgs);
-    setThreadAffinity(frameReaderThreadID, 0); // Bind to core 0
+    setThreadAffinity(frameReaderThreadID, 0); 
 
     // Traffic lights service
     std::string engine_path = "./services/tl_detect.onnx";
@@ -67,7 +67,7 @@ int main() {
 
     pthread_t trafficLightsThreadID;
     pthread_create(&trafficLightsThreadID, nullptr, ServiceWrapperThread<Detection>, &trafficLightsArgs);
-    setThreadAffinity(trafficLightsThreadID, 0); // Bind to core 0
+    setThreadAffinity(trafficLightsThreadID, 1); 
 
     // Car detection service
     serviceWrapperArgs<cv::Rect> carDetectionArgs;
@@ -81,7 +81,7 @@ int main() {
 
     pthread_t carDetectionThreadID;
     pthread_create(&carDetectionThreadID, nullptr, ServiceWrapperThread<cv::Rect>, &carDetectionArgs);
-    setThreadAffinity(carDetectionThreadID, 0); // Bind to core 0
+    setThreadAffinity(carDetectionThreadID, 2);
 
   // Draw frame service
     DrawFrameArgs drawFrameArgs;
@@ -95,7 +95,7 @@ int main() {
 
     pthread_t drawFrameThreadID;
     pthread_create(&drawFrameThreadID, nullptr, DrawFrameThread, &drawFrameArgs);
-    setThreadAffinity(drawFrameThreadID, 0); // Bind to core 0
+    setThreadAffinity(drawFrameThreadID, 3); // Bind to core 0
 
     while (true) {
         continue;

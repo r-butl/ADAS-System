@@ -43,28 +43,23 @@ void* DrawFrameThread(void* arg) {
     }
 
     uint8_t bitmask = (1 << args->numServices) - 1; // Create a bitmask for the number of services
-
     cv::Mat frame;
+    auto lastTime = std::chrono::high_resolution_clock::now(); // Initialize the timer
+    double fps = 0.0;
+ 
     while (!stopFlag->load()) {
 
-
-        //std::cout << "Draw: Waiting for frame..." << std::endl;
-        //std::cout.flush();
         // Wait for the frameReadyFlag to be set to 1
         while ((frameReadyFlag->load() & activeBit) == 0 && !stopFlag->load()) {
             std::this_thread::sleep_for(std::chrono::milliseconds(1)); // Sleep for 1 ms
-
         }
 
         // Copy the frame from the frameBuffer to localFrame
         frame = *frameBuffer;
-        // Reset the frameReadyFlag to 0
         *frameReadyFlag &= ~activeBit;
-        //std::cout << "Draw: Frame pulled. Waiting for services to finish previous frame." << std::endl;
 
         // Wait for the processingDoneFlag to be set to 0
         while ((*processingDoneFlag & bitmask) != bitmask && !stopFlag->load()) {
-            //printf("Processing Done Flag: %d\n", processingDoneFlag->load());
             //std::this_thread::sleep_for(std::chrono::milliseconds(1)); // Sleep for 1 ms
         }
 
@@ -75,8 +70,17 @@ void* DrawFrameThread(void* arg) {
 
         // Draw rectangles on the frame (example)
 
-        //std::cout << "Draw: Drawing." << std::endl;
 
+        // Calculate FPS
+        auto currentTime = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double> elapsed = currentTime - lastTime;
+        lastTime = currentTime;
+        fps = 1.0 / elapsed.count();
+
+        // Draw FPS on the frame
+        std::string fpsText = "FPS: " + std::to_string(static_cast<int>(fps));
+        cv::putText(frame, fpsText, cv::Point(10, 30), cv::FONT_HERSHEY_SIMPLEX, 1.0, cv::Scalar(0, 255, 0), 2);
+        
         // Display the frame
         if (!frame.empty()) {
             cv::imshow(windowName, frame);
