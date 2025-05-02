@@ -32,12 +32,6 @@ TRAFFIC_LIGHTS_OBJ = $(BUILD_DIR)/traffic_lights.o
 $(TRAFFIC_LIGHTS_OBJ): $(TRAFFIC_LIGHTS_SRC) | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-# Build read_frame file
-READ_FRAME_SRC = $(SERVICES_DIR)/read_frame.cpp
-READ_FRAME_OBJ = $(BUILD_DIR)/read_frame.o
-$(READ_FRAME_OBJ): $(READ_FRAME_SRC) | $(BUILD_DIR)
-	$(CXX) $(CXXFLAGS) -c $< -o $@
-
 # Build the main file
 MAIN_SRC = main.cpp
 MAIN_OBJ = $(BUILD_DIR)/main.o
@@ -52,7 +46,7 @@ $(CAR_OBJ): $(CAR_SRC) | $(BUILD_DIR)
 
 
 # Build the executable
-$(SRC_DIR)/adas_app: $(MAIN_OBJ) $(READ_FRAME_OBJ) $(TRAFFIC_LIGHTS_OBJ) $(CAR_OBJ)
+$(SRC_DIR)/adas_app: $(MAIN_OBJ) $(TRAFFIC_LIGHTS_OBJ) $(CAR_OBJ)
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 
 # Create build directory if it doesn't exist

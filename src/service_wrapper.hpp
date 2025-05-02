@@ -15,29 +15,27 @@ struct serviceWrapperArgs {
     std::atomic<uint8_t>* frameReadyFlag;
     std::atomic<uint8_t>* processingDoneFlag;
     uint8_t activeBit;
-    bool stopFlag*;
+    std::atomic<bool>* stopFlag;
 };
 
 template <typename T>
-void ServiceWrapperProcess(void *args) {
-
-    std::function<std::vector<T>(cv::Mat&)> processFunction = args->processFunction;
-    cv::Mat* frameBuffer = args->frameBuffer;
-    std::vector<T>* outputStore = args->outputStore;
-    std::atomic<uint8_t>* frameReadyFlag = args->frameReadyFlag;
-    std::atomic<uint8_t>* processingDoneFlag = args->processingDoneFlag;
-    uint8_t activeBit = args->activeBit;
-    bool stopFlag* = args->stopFlag;
+void* ServiceWrapperThread(void* args) {
+    serviceWrapperArgs<T>* argsStruct = static_cast<serviceWrapperArgs<T>*>(args);
+    std::function<std::vector<T>(cv::Mat&)> processFunction = argsStruct->processFunction;
+    cv::Mat* frameBuffer = argsStruct->frameBuffer;
+    std::vector<T>* outputStore = argsStruct->outputStore;
+    std::atomic<uint8_t>* frameReadyFlag = argsStruct->frameReadyFlag;
+    std::atomic<uint8_t>* processingDoneFlag = argsStruct->processingDoneFlag;
+    uint8_t activeBit = argsStruct->activeBit;
+    std::atomic<bool>* stopFlag= argsStruct->stopFlag;
 
     cv::Mat localFrame;
 
-    while (!stopFlag*) {
+    while (!stopFlag->load()) {
         // Wait for the frameReadyFlag to be set to 1
-        while ((*frameReadyFlag & activeBit) == 0 && !*stopFlag) {
+        while ((frameReadyFlag->load() & activeBit) == 0 && !stopFlag->load()) {
             sched_yield();
         }
-
-        if (*stopFlag) break;
 
         // Copy the frame from the frameBuffer to localFrame
         localFrame = *frameBuffer;
@@ -49,11 +47,9 @@ void ServiceWrapperProcess(void *args) {
         std::vector<T> result = processFunction(*frameBuffer);
 
         // Wait for the processingDoneFlag to be set to 0
-        while ((*processingDoneFlag & activeBit) != 0 && !*stopFlag) {
+        while ((*processingDoneFlag & activeBit) != 0 && !stopFlag->load()) {
             sched_yield();
         }
-
-        if (*stopFlag) break;
 
         // Write the result to the output store
         *outputStore = result;

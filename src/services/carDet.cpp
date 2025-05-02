@@ -21,7 +21,7 @@ vector<Rect> carDetection(Mat Frame){
 
     if (!carCascade.load(cascadename)) {
         cerr << "Error loading cascade";
-        return;
+        std::abort();
     }
     
     int frameHeight = Frame.rows;

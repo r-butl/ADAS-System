@@ -2,10 +2,10 @@
 #define TRAFFIC_LIGHTS_HPP
 
 #include <string>
-#include "frame_buffer.hpp"
-#include "annotations_buffer.hpp"
-
 #include <NvInfer.h>
+#include <vector>
+#include <opencv2/opencv.hpp>
+#include <cuda_runtime_api.h>
 using namespace nvinfer1;
 
 struct Detection {
@@ -20,7 +20,7 @@ public:
 
     static void* run(void* arg); // Entry point for pthreads
 
-    void inferenceLoop(cv::Mat frame, std::vector<Detection> &detections);
+    std::vector<Detection> inferenceLoop(cv::Mat& frame);
 private:
     std::vector<Detection> postprocessImage(float* output, int num_detections, float conf_thresh, float nms_thresh);
     float computeIoU(const Detection& a, const Detection& b);

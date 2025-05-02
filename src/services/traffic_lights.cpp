@@ -2,8 +2,6 @@
 #include "cuda_runtime_api.h"
 #include <iostream>
 #include <vector>
-#include "frame_buffer.hpp"
-#include "annotations_buffer.hpp"
 #include "traffic_lights.hpp"
 #include <numeric>
 #include <functional>
@@ -205,8 +203,7 @@ float TrafficLights::computeIoU(const Detection& a, const Detection& b){
 	return union_area > 0 ? inter_area / union_area : 0.0f;
 }
 
-void TrafficLights::inferenceLoop(cv::Mat frame, std::vector<Detection> &detections) {
-
+std::vector<Detection> TrafficLights::inferenceLoop(cv::Mat& frame) {
 
 	// preprocess the image
         cv::Mat resized, rgb, float_img;
@@ -235,7 +232,6 @@ void TrafficLights::inferenceLoop(cv::Mat frame, std::vector<Detection> &detecti
 
 	auto output_dims = context->getTensorShape(output_name);
 	int output_size = std::accumulate(output_dims.d, output_dims.d + output_dims.nbDims, 1, std::multiplies<int>()) * sizeof(float);
-
 	
 	// Allocate memory on the GPU for the operation
 	void* input_mem{nullptr};
@@ -259,8 +255,9 @@ void TrafficLights::inferenceLoop(cv::Mat frame, std::vector<Detection> &detecti
 	cudaFree(input_mem);
 	cudaFree(output_mem);
 	
-	detections.clear();
-	detections = postprocessImage(output_buffer.get(), 10, 0.3, 0.3);
+	std::vector<Detection> detections = postprocessImage(output_buffer.get(), 10, 0.3, 0.3);
+
+	return detections;
 
 }
 
