@@ -171,7 +171,7 @@ std::vector<Detection> TrafficLights::postprocessImage(float* output, int num_de
 		detections.push_back(d);
 	}
 
-    printf("Number of detections after confidence thresholding: %zu\n", detections.size());
+    // 00printf("Number of detections after confidence thresholding: %zu\n", detections.size());
 	// NMS
 	std::sort(detections.begin(), detections.end(), [](const Detection& a, const Detection& b){
 		return a.conf > b.conf;
@@ -189,7 +189,7 @@ std::vector<Detection> TrafficLights::postprocessImage(float* output, int num_de
 		}
 	}
 
-	printf("Number of detections after NMS: %zu\n", results.size());
+	// rintf("Number of detections after NMS: %zu\n", results.size());
 
 	return results;
 }
@@ -220,17 +220,17 @@ std::vector<Detection> TrafficLights::inferenceLoop(cv::Mat& frame) {
 
 	cv::Mat frame_float;
 	frame.convertTo(frame_float, CV_32FC3, 1.0f / 255.0);
-	for (int i = 0; i < 10; i++) {
-		printf("frame[%d] = %f\n", i, frame.at<float>(i));  // Inspect first 10 values
-	}
+	// for (int i = 0; i < 10; i++) {
+	// 	printf("frame[%d] = %f\n", i, frame.at<float>(i));  // Inspect first 10 values
+	// }
 
     cv::resize(frame, resized, cv::Size(input_w, input_h));
     cv::cvtColor(resized, rgb, cv::COLOR_BGR2RGB);
     rgb.convertTo(float_img, CV_32FC3, 1.0f / 255.0);
 
-	for (int i = 0; i < 10; i++) {
-		printf("float_img[%d] = %f\n", i, float_img.at<float>(i));  // Inspect first 10 values
-	}
+	// for (int i = 0; i < 10; i++) {
+	// 	printf("float_img[%d] = %f\n", i, float_img.at<float>(i));  // Inspect first 10 values
+	// }
 
 	std::vector<float> gpu_input(3 * input_h * input_w);
 	
@@ -243,34 +243,34 @@ std::vector<Detection> TrafficLights::inferenceLoop(cv::Mat& frame) {
 
 	//////// DEBUG
 
-	// Allocate GPU memory for input
-	void* db_input_mem = nullptr;
-	int db_input_size = gpu_input.size() * sizeof(float);
-	cudaMalloc(&db_input_mem, db_input_size);
+	// // Allocate GPU memory for input
+	// void* db_input_mem = nullptr;
+	// int db_input_size = gpu_input.size() * sizeof(float);
+	// cudaMalloc(&db_input_mem, db_input_size);
 
-	// Copy input data from host (gpu_input) to device (input_mem)
-	cudaMemcpy(db_input_mem, gpu_input.data(), db_input_size, cudaMemcpyHostToDevice);
+	// // Copy input data from host (gpu_input) to device (input_mem)
+	// cudaMemcpy(db_input_mem, gpu_input.data(), db_input_size, cudaMemcpyHostToDevice);
 
-	std::vector<float> cpu_input(gpu_input.size());
-	cudaMemcpy(cpu_input.data(), db_input_mem, db_input_size, cudaMemcpyDeviceToHost);
-	int print_count = 10;  // Print first 10 values for debugging
-	for (int i = 0; i < print_count; ++i) {
-		// Print values from each channel (you can adjust this loop for more/less printing)
-		printf("Input[%d] = %f\n", i, cpu_input[i]);
-	}
+	// std::vector<float> cpu_input(gpu_input.size());
+	// cudaMemcpy(cpu_input.data(), db_input_mem, db_input_size, cudaMemcpyDeviceToHost);
+	// int print_count = 10;  // Print first 10 values for debugging
+	// for (int i = 0; i < print_count; ++i) {
+	// 	// Print values from each channel (you can adjust this loop for more/less printing)
+	// 	printf("Input[%d] = %f\n", i, cpu_input[i]);
+	// }
 
-	bool is_valid_range = true;
+	// bool is_valid_range = true;
 
-	for (float val : cpu_input) {
-		if (val < 0.0f || val > 1.0f) {
-			printf("Out of range value detected: %f\n", val);
-			is_valid_range = false;
-			break;
-		}
-	}
-	if (is_valid_range) {
-		printf("All input values are within the [0, 1] range.\n");
-	}
+	// for (float val : cpu_input) {
+	// 	if (val < 0.0f || val > 1.0f) {
+	// 		printf("Out of range value detected: %f\n", val);
+	// 		is_valid_range = false;
+	// 		break;
+	// 	}
+	// }
+	// if (is_valid_range) {
+	// 	printf("All input values are within the [0, 1] range.\n");
+	// }
 	
 	///////// END DEBUG
 
