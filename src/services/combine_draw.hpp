@@ -25,6 +25,7 @@ struct DrawFrameArgs {
     int numServices;
     std::atomic<bool>* stopFlag;
     std::vector<Detection>* trafficLights;
+    std::vector<Rect>* cars;
 };
 
 void* DrawFrameThread(void* arg) {
@@ -64,12 +65,21 @@ void* DrawFrameThread(void* arg) {
             //std::this_thread::sleep_for(std::chrono::milliseconds(1)); // Sleep for 1 ms
         }
 
+        /////////////////////////// Annotations ///////////////////////////
         // Draw traffic lights annotations
         for (const auto& annotation : *args->trafficLights) {
             cv::rectangle(frame, cv::Point(annotation.x, annotation.y), 
                           cv::Point(annotation.x + annotation.w, annotation.y + annotation.h), 
                           cv::Scalar(0, 255, 0), 2); // green boxes, thickness=2
         }
+
+
+        // draw cars annotations
+        for (const auto& rect: *args->cars) {
+            cv::rectangle(frame, rect, cv::Scalar(0, 0, 255), 2); // red boxes, thickness=2
+        }
+
+        ////////////////////////// End Annotations ///////////////////////////
 
         // Flip the processingDoneFlag to 0
         processingDoneFlag->store(0);

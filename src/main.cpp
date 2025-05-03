@@ -54,34 +54,35 @@ int main() {
     setThreadAffinity(frameReaderThreadID, 0); 
 
     // Traffic lights service
-    std::string engine_path = "./services/tl_detect.onnx";
-    TrafficLights trafficLights(engine_path);
-    serviceWrapperArgs<Detection> trafficLightsArgs;
-    trafficLightsArgs.processFunction = [&trafficLights](cv::Mat& frame) { return trafficLights.inferenceLoop(frame); };    
-    trafficLightsArgs.frameBuffer = &frameBuffer;
-    trafficLightsArgs.outputStore = &vTrafficLightsAnnotations;
-    trafficLightsArgs.frameReadyFlag = &uFrameReadyFlag;
-    trafficLightsArgs.processingDoneFlag = &uProcessingDoneFlag;
-    trafficLightsArgs.activeBit = 0x01;                     // Need to be unique bit for each service   
-    trafficLightsArgs.stopFlag = &stopFlag;
+    // std::string engine_path = "./services/tl_detect.onnx";
+    // TrafficLights trafficLights(engine_path);
+    // serviceWrapperArgs<Detection> trafficLightsArgs;
+    // trafficLightsArgs.processFunction = [&trafficLights](cv::Mat& frame) { return trafficLights.inferenceLoop(frame); };    
+    // trafficLightsArgs.frameBuffer = &frameBuffer;
+    // trafficLightsArgs.outputStore = &vTrafficLightsAnnotations;
+    // trafficLightsArgs.frameReadyFlag = &uFrameReadyFlag;
+    // trafficLightsArgs.processingDoneFlag = &uProcessingDoneFlag;
+    // trafficLightsArgs.activeBit = 0x01;                     // Need to be unique bit for each service   
+    // trafficLightsArgs.stopFlag = &stopFlag;
 
-    pthread_t trafficLightsThreadID;
-    pthread_create(&trafficLightsThreadID, nullptr, ServiceWrapperThread<Detection>, &trafficLightsArgs);
-    setThreadAffinity(trafficLightsThreadID, 1); 
+    // pthread_t trafficLightsThreadID;
+    // pthread_create(&trafficLightsThreadID, nullptr, ServiceWrapperThread<Detection>, &trafficLightsArgs);
+    // setThreadAffinity(trafficLightsThreadID, 1); 
 
     // // Car detection service
-    // serviceWrapperArgs<cv::Rect> carDetectionArgs;
-    // carDetectionArgs.processFunction = &carDetection;
-    // carDetectionArgs.frameBuffer = &frameBuffer;
-    // carDetectionArgs.outputStore = &vCarAnnotations;
-    // carDetectionArgs.frameReadyFlag = &uFrameReadyFlag;
-    // carDetectionArgs.processingDoneFlag = &uProcessingDoneFlag;
-    // carDetectionArgs.activeBit = 0x01;                          // Need to be unique bit for each service
-    // carDetectionArgs.stopFlag = &stopFlag;
+    CarDetector detector("./cars.xml");
+    serviceWrapperArgs<cv::Rect> carDetectionArgs;
+    carDetectionArgs.processFunction = [&detector](cv::Mat& frame) { return detector.detectCars(frame); };
+    carDetectionArgs.frameBuffer = &frameBuffer;
+    carDetectionArgs.outputStore = &vCarAnnotations;
+    carDetectionArgs.frameReadyFlag = &uFrameReadyFlag;
+    carDetectionArgs.processingDoneFlag = &uProcessingDoneFlag;
+    carDetectionArgs.activeBit = 0x01;                          // Need to be unique bit for each service
+    carDetectionArgs.stopFlag = &stopFlag;
 
-    // pthread_t carDetectionThreadID;
-    // pthread_create(&carDetectionThreadID, nullptr, ServiceWrapperThread<cv::Rect>, &carDetectionArgs);
-    // setThreadAffinity(carDetectionThreadID, 2);
+    pthread_t carDetectionThreadID;
+    pthread_create(&carDetectionThreadID, nullptr, ServiceWrapperThread<cv::Rect>, &carDetectionArgs);
+    setThreadAffinity(carDetectionThreadID, 2);
 
   // Draw frame service
     DrawFrameArgs drawFrameArgs;
@@ -93,6 +94,7 @@ int main() {
     drawFrameArgs.numServices = 1;                              // CRITICAL: needs to be # of annotation services
     drawFrameArgs.stopFlag = &stopFlag;
     drawFrameArgs.trafficLights = &vTrafficLightsAnnotations;
+    drawFrameArgs.cars = &vCarAnnotations;
 
     pthread_t drawFrameThreadID;
     pthread_create(&drawFrameThreadID, nullptr, DrawFrameThread, &drawFrameArgs);
@@ -105,8 +107,8 @@ int main() {
 
     // Wait for the frame reader thread to finish (in a real application, you'd handle this differently)
     pthread_join(frameReaderThreadID, nullptr);
-    pthread_join(trafficLightsThreadID, nullptr);
-    //pthread_join(carDetectionThreadID, nullptr);
+    //pthread_join(trafficLightsThreadID, nullptr);
+    pthread_join(carDetectionThreadID, nullptr);
     pthread_join(drawFrameThreadID, nullptr);
 
     return 0;

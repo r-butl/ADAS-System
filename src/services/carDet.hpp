@@ -1,13 +1,26 @@
-#ifndef CARDET_HPP
-#define CARDET_HPP
+#ifndef CAR_DETECTOR_HPP
+#define CAR_DETECTOR_HPP
 
-
+#include "opencv2/imgcodecs.hpp"
+#include "opencv2/objdetect.hpp"
+#include "opencv2/imgproc.hpp"
 #include <vector>
-#include <opencv2/opencv.hpp>
+#include <string>
 
-using namespace std;
 using namespace cv;
+using namespace std;
 
-vector<Rect> carDetection(Mat Frame);
+class CarDetector {
+private:
+    CascadeClassifier carCascade;
+    String cascadePath;
 
-#endif 
+public:
+    // Constructor to load the cascade classifier
+    CarDetector(const String& cascadeFilePath);
+
+    // Function to detect cars in the given frame
+    vector<Rect> detectCars(const Mat& Frame);
+};
+
+#endif // CAR_DETECTOR_HPP
