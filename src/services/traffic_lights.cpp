@@ -2,8 +2,6 @@
 #include "cuda_runtime_api.h"
 #include <iostream>
 #include <vector>
-#include "frame_buffer.hpp"
-#include "annotations_buffer.hpp"
 #include "traffic_lights.hpp"
 #include <numeric>
 #include <functional>
@@ -161,6 +159,7 @@ std::vector<Detection> TrafficLights::postprocessImage(float* output, int num_de
 		float class_conf = class_scores[class_id];
 		float final_conf = obj_conf * class_conf;
 		if (final_conf < conf_thresh) continue;
+		if (class_id == 3) continue; // ignore background class
 		
 		Detection d;
 		d.x = det[0];
@@ -172,7 +171,7 @@ std::vector<Detection> TrafficLights::postprocessImage(float* output, int num_de
 		detections.push_back(d);
 	}
 
-
+    // 00printf("Number of detections after confidence thresholding: %zu\n", detections.size());
 	// NMS
 	std::sort(detections.begin(), detections.end(), [](const Detection& a, const Detection& b){
 		return a.conf > b.conf;
@@ -190,6 +189,8 @@ std::vector<Detection> TrafficLights::postprocessImage(float* output, int num_de
 		}
 	}
 
+	// rintf("Number of detections after NMS: %zu\n", results.size());
+
 	return results;
 }
 
@@ -205,23 +206,73 @@ float TrafficLights::computeIoU(const Detection& a, const Detection& b){
 	return union_area > 0 ? inter_area / union_area : 0.0f;
 }
 
-void TrafficLights::inferenceLoop(cv::Mat frame, std::vector<Detection> &detections) {
-
+std::vector<Detection> TrafficLights::inferenceLoop(cv::Mat& frame) {
 
 	// preprocess the image
-        cv::Mat resized, rgb, float_img;
+    cv::Mat resized, rgb, float_img;
 	int input_w = 736, input_h = 736;
-        cv::resize(frame, resized, cv::Size(input_w, input_h));
-        cv::cvtColor(resized, rgb, cv::COLOR_BGR2RGB);
-        rgb.convertTo(float_img, CV_32FC3, 1.0, 255.0);
+
+
+	if(frame.empty()) {
+		std::cerr << "Error: Empty frame received for inference." << std::endl;
+		return {};
+	}
+
+	cv::Mat frame_float;
+	frame.convertTo(frame_float, CV_32FC3, 1.0f / 255.0);
+	// for (int i = 0; i < 10; i++) {
+	// 	printf("frame[%d] = %f\n", i, frame.at<float>(i));  // Inspect first 10 values
+	// }
+
+    cv::resize(frame, resized, cv::Size(input_w, input_h));
+    cv::cvtColor(resized, rgb, cv::COLOR_BGR2RGB);
+    rgb.convertTo(float_img, CV_32FC3, 1.0f / 255.0);
+
+	// for (int i = 0; i < 10; i++) {
+	// 	printf("float_img[%d] = %f\n", i, float_img.at<float>(i));  // Inspect first 10 values
+	// }
 
 	std::vector<float> gpu_input(3 * input_h * input_w);
 	
 	// Reorder the channels
-        std::vector<cv::Mat> chw(3);
-        for (int i = 0; i < 3; i++)
-                chw[i] = cv::Mat(input_h, input_w, CV_32FC1, gpu_input.data() + i * input_h * input_w);
-        cv::split(float_img, chw);
+	std::vector<cv::Mat> chw(3);
+	for (int i = 0; i < 3; i++)
+			chw[i] = cv::Mat(input_h, input_w, CV_32FC1, gpu_input.data() + i * input_h * input_w);
+	cv::split(float_img, chw);
+
+
+	//////// DEBUG
+
+	// // Allocate GPU memory for input
+	// void* db_input_mem = nullptr;
+	// int db_input_size = gpu_input.size() * sizeof(float);
+	// cudaMalloc(&db_input_mem, db_input_size);
+
+	// // Copy input data from host (gpu_input) to device (input_mem)
+	// cudaMemcpy(db_input_mem, gpu_input.data(), db_input_size, cudaMemcpyHostToDevice);
+
+	// std::vector<float> cpu_input(gpu_input.size());
+	// cudaMemcpy(cpu_input.data(), db_input_mem, db_input_size, cudaMemcpyDeviceToHost);
+	// int print_count = 10;  // Print first 10 values for debugging
+	// for (int i = 0; i < print_count; ++i) {
+	// 	// Print values from each channel (you can adjust this loop for more/less printing)
+	// 	printf("Input[%d] = %f\n", i, cpu_input[i]);
+	// }
+
+	// bool is_valid_range = true;
+
+	// for (float val : cpu_input) {
+	// 	if (val < 0.0f || val > 1.0f) {
+	// 		printf("Out of range value detected: %f\n", val);
+	// 		is_valid_range = false;
+	// 		break;
+	// 	}
+	// }
+	// if (is_valid_range) {
+	// 	printf("All input values are within the [0, 1] range.\n");
+	// }
+	
+	///////// END DEBUG
 
 	// Set up the execution context input
 	char const* input_name = "images";
@@ -235,7 +286,6 @@ void TrafficLights::inferenceLoop(cv::Mat frame, std::vector<Detection> &detecti
 
 	auto output_dims = context->getTensorShape(output_name);
 	int output_size = std::accumulate(output_dims.d, output_dims.d + output_dims.nbDims, 1, std::multiplies<int>()) * sizeof(float);
-
 	
 	// Allocate memory on the GPU for the operation
 	void* input_mem{nullptr};
@@ -252,15 +302,16 @@ void TrafficLights::inferenceLoop(cv::Mat frame, std::vector<Detection> &detecti
 	context->setTensorAddress(input_name, input_mem);
 	context->setTensorAddress(output_name, output_mem);
 	bool status = context->enqueueV3(stream);
-	auto output_buffer = std::unique_ptr<float>{new float[output_size]};
+	auto output_buffer = std::unique_ptr<float[]>{new float[output_size / sizeof(float)]};
 	cudaMemcpyAsync(output_buffer.get(), output_mem, output_size, cudaMemcpyDeviceToHost, stream);
 	cudaStreamSynchronize(stream);
 
 	cudaFree(input_mem);
 	cudaFree(output_mem);
 	
-	detections.clear();
-	detections = postprocessImage(output_buffer.get(), 10, 0.3, 0.3);
+	std::vector<Detection> detections = postprocessImage(output_buffer.get(), 10, 0.3, 0.3);
+
+	return detections;
 
 }
 

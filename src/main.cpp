@@ -1,101 +1,115 @@
 #include <iostream>
 #include <pthread.h>
 #include "services/read_frame.hpp"
-#include "datastructures/frame_buffer.hpp"
 #include "services/carDet.hpp"
 #include "services/traffic_lights.hpp"
+#include "service_wrapper.hpp"
+#include "services/combine_draw.hpp"
 #include <string>
 
 #define ESCAPE_KEY (27)
 
-std::vector<cv::Rect> detectionsToRects(const std::vector<Detection>& detections) {
-    std::vector<cv::Rect> rects;
-    rects.reserve(detections.size()); // reserve memory
+void setThreadAffinity(pthread_t thread, int core_id) {
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);           // Clear the CPU set
+    CPU_SET(core_id, &cpuset);   // Add the desired core to the set
 
-    for (const auto& det : detections) {
-        int x = static_cast<int>(det.x);
-        int y = static_cast<int>(det.y);
-        int w = static_cast<int>(det.w);
-        int h = static_cast<int>(det.h);
-        rects.emplace_back(x, y, w, h);
-    }
-
-    return rects;
-}
-
-void drawRectangles(cv::Mat& image, const std::vector<cv::Rect>& rects) {
-    for (const auto& rect : rects) {
-        cv::rectangle(image, rect, cv::Scalar(0, 255, 0), 2); // green boxes, thickness=2
+    int result = pthread_setaffinity_np(thread, sizeof(cpu_set_t), &cpuset);
+    if (result != 0) {
+        std::cerr << "Error setting thread affinity: " << strerror(result) << std::endl;
+    } else {
+        std::cout << "Thread bound to core " << core_id << std::endl;
     }
 }
 
 int main() {
     std::cout << "Starting frame reader service..." << std::endl;
+
+    // Global variables
+    cv::Mat currentFrame;
+    std::atomic<bool> stopFlag = false;
     
-    // Read frame thread
-    FrameBuffer frameBuffer;
-
-    FrameReaderArgs args;
-    args.frameBuffer = &frameBuffer;
-    args.source = "../../video.mp4";
-
-    pthread_t frameReaderThreadID;
-    pthread_create(&frameReaderThreadID, nullptr, frameReaderThread, &args);
-
-
-    std::string engine_path = "./services/tl_detect.onnx";
-    TrafficLights trafficLights(engine_path);
-
-
 	// Annotations buffer
-	std::vector<Rect> cars;
-	std::vector<Detection> traffic_lights;
+	std::vector<Rect> vCarAnnotations;
+	std::vector<Detection> vTrafficLightsAnnotations;
 	// pedestrians
 	// lane lines
-	
-    // Simulate other services grabbing frames
-    cv::Mat frame;
-    uint64_t lastFrameVersion = 0;
-    char winInput;
-    
-    // fps
-    double fps;
-    int64 start, end;
-    
-    vector<Rect> test;  // for cars ;;;; testing
+
+    // Sequencer flags
+    std::atomic<uint8_t> uFrameReadyFlag(0);
+    std::atomic<uint8_t> uProcessingDoneFlag(0);
+
+    // Read frame thread
+    cv::Mat frameBuffer;
+
+    FrameReaderArgs frameReaderArgs;
+    frameReaderArgs.frameBuffer = &frameBuffer;
+    frameReaderArgs.source = "../../video.mp4";
+    frameReaderArgs.frameReadyFlag = &uFrameReadyFlag;
+    frameReaderArgs.numServices = 3;                             // CRITICAL: needs to be # of annotation services + 1 draw service
+    frameReaderArgs.stopFlag = &stopFlag;
+
+    pthread_t frameReaderThreadID;
+    pthread_create(&frameReaderThreadID, nullptr, frameReaderThread, &frameReaderArgs);
+    setThreadAffinity(frameReaderThreadID, 0); 
+
+    // Traffic lights service
+    std::string engine_path = "./services/tl_detect.onnx";
+    TrafficLights trafficLights(engine_path);
+    serviceWrapperArgs<Detection> trafficLightsArgs;
+    trafficLightsArgs.processFunction = [&trafficLights](cv::Mat& frame) { return trafficLights.inferenceLoop(frame); };    
+    trafficLightsArgs.frameBuffer = &frameBuffer;
+    trafficLightsArgs.outputStore = &vTrafficLightsAnnotations;
+    trafficLightsArgs.frameReadyFlag = &uFrameReadyFlag;
+    trafficLightsArgs.processingDoneFlag = &uProcessingDoneFlag;
+    trafficLightsArgs.activeBit = 0x01;                     // Need to be unique bit for each service   
+    trafficLightsArgs.stopFlag = &stopFlag;
+
+    pthread_t trafficLightsThreadID;
+    pthread_create(&trafficLightsThreadID, nullptr, ServiceWrapperThread<Detection>, &trafficLightsArgs);
+    setThreadAffinity(trafficLightsThreadID, 1); 
+
+    // // Car detection service
+    CarDetector detector("./cars.xml");
+    serviceWrapperArgs<cv::Rect> carDetectionArgs;
+    carDetectionArgs.processFunction = [&detector](cv::Mat& frame) { return detector.detectCars(frame); };
+    carDetectionArgs.frameBuffer = &frameBuffer;
+    carDetectionArgs.outputStore = &vCarAnnotations;
+    carDetectionArgs.frameReadyFlag = &uFrameReadyFlag;
+    carDetectionArgs.processingDoneFlag = &uProcessingDoneFlag;
+    carDetectionArgs.activeBit = 0x02;                          // Need to be unique bit for each service
+    carDetectionArgs.stopFlag = &stopFlag;
+
+    pthread_t carDetectionThreadID;
+    pthread_create(&carDetectionThreadID, nullptr, ServiceWrapperThread<cv::Rect>, &carDetectionArgs);
+    setThreadAffinity(carDetectionThreadID, 2);
+
+  // Draw frame service
+    DrawFrameArgs drawFrameArgs;
+    drawFrameArgs.frameBuffer = &frameBuffer;
+    drawFrameArgs.windowName = "Annotated Frame";
+    drawFrameArgs.frameReadyFlag = &uFrameReadyFlag;
+    drawFrameArgs.processingDoneFlag = &uProcessingDoneFlag;
+    drawFrameArgs.activeBit = 0x04;                     // Need to be unique bit for each service    
+    drawFrameArgs.numServices = 2;                              // CRITICAL: needs to be # of annotation services
+    drawFrameArgs.stopFlag = &stopFlag;
+    drawFrameArgs.trafficLights = &vTrafficLightsAnnotations;
+    drawFrameArgs.cars = &vCarAnnotations;
+
+    pthread_t drawFrameThreadID;
+    pthread_create(&drawFrameThreadID, nullptr, DrawFrameThread, &drawFrameArgs);
+    setThreadAffinity(drawFrameThreadID, 3); // Bind to core 0
 
     while (true) {
-    start = cv::getTickCount();
-        bool newFrame = frameBuffer.getLatestFrame(frame, lastFrameVersion);
+        continue;
 
-	if (newFrame && !frame.empty()){
-		trafficLights.inferenceLoop(frame, traffic_lights);
-		lastFrameVersion++;
-		carDetection(frame, cars);
-
-		drawRectangles(frame, cars);
-		drawRectangles(frame, detectionsToRects(traffic_lights));
-		
-		// FPS
-		end = cv::getTickCount();
-		double duration = (end - start) / cv::getTickFrequency();
-		fps = 1.0/duration;
-		cv::putText(frame, "FPS: " + std::to_string(int(fps)), cv::Point(10,30), cv::FONT_HERSHEY_SIMPLEX, 1.0, cv::Scalar(0,255,0), 2);								// ==================
-		cv::imshow("video", frame);
-		if ((winInput = waitKey(10)) == ESCAPE_KEY){
-		  break;
-		}
-		
-		
-		
-	}
-	
     }
-    cv::destroyWindow("video_display");
-    
 
     // Wait for the frame reader thread to finish (in a real application, you'd handle this differently)
     pthread_join(frameReaderThreadID, nullptr);
+    pthread_join(trafficLightsThreadID, nullptr);
+    pthread_join(carDetectionThreadID, nullptr);
+    pthread_join(drawFrameThreadID, nullptr);
 
     return 0;
 }

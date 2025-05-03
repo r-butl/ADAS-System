@@ -1,180 +1,146 @@
-
-#include "opencv2/imgcodecs.hpp"
-#include "opencv2/objdetect.hpp"
-#include "opencv2/highgui/highgui.hpp"
-#include "opencv2/imgproc.hpp"
+#include "carDet.hpp"
 #include <iostream>
-#include <stdio.h>
-#include <stdlib.h>
-#include <time.h>
-#include <vector>
-
 
 using namespace std;
 using namespace cv;
 
-void carDetection(Mat Frame, vector<Rect> &annotations_buffer){
-
-    annotations_buffer.clear();
-
-    String cascadename = "./cars.xml";
-    CascadeClassifier carCascade;
-
-    if (!carCascade.load(cascadename)) {
-        cerr << "Error loading cascade";
-        return;
+CarDetector::CarDetector(const String& cascadeFilePath) : cascadePath(cascadeFilePath) {
+    // Load the cascade file
+    if (!carCascade.load(cascadePath)) {
+        cerr << "Error loading cascade" << endl;
+        exit(-1);
     }
-    
+}
+
+vector<Rect> CarDetector::detectCars(const Mat& Frame) {
+    vector<Rect> annotations_buffer;
+
     int frameHeight = Frame.rows;
-        int frameWidth = Frame.cols;
+    int frameWidth = Frame.cols;
 
-        // Define Region of Interest: exclude top 1/4 and bottom 1/5
-        Rect roi(0, frameHeight / 4, frameWidth, frameHeight - (frameHeight / 5) - (frameHeight / 4));
-        Mat roiFrame = Frame(roi);
+    // Define Region of Interest: exclude top 1/4 and bottom 1/5
+    Rect roi(0, frameHeight / 4, frameWidth, frameHeight - (frameHeight / 5) - (frameHeight / 4));
+    Mat roiFrame = Frame(roi);
 
-        Mat grayFrame;
-        cvtColor(roiFrame, grayFrame, COLOR_BGR2GRAY);
-        equalizeHist(grayFrame, grayFrame);
+    Mat grayFrame(roiFrame.size(), CV_8UC1);
 
-        vector<Rect> cars;
-        carCascade.detectMultiScale(
-            grayFrame,
-            cars,
-            1.25,              // Scale factor
-            2,                // Increase minNeighbors to reduce false positives
-            0,
-            Size(20, 20)      // Minimum size
-        );
-	
+    #pragma omp parallel for
+    for (int i = 0; i < roiFrame.rows; i++) {
+        cvtColor(roiFrame.row(i), grayFrame.row(i), COLOR_BGR2GRAY);
+    }
+    //cvtColor(roiFrame, grayFrame, COLOR_BGR2GRAY);
+    
+    #pragma omp parallel for
+    for (int i = 0; i < grayFrame.rows; i++) {
+        equalizeHist(grayFrame.row(i), grayFrame.row(i));
+    }
+    //equalizeHist(grayFrame, grayFrame);
 
-        for (auto& car : cars) {
-            // Filter false positives using aspect ratio and size
-            float aspectRatio = static_cast<float>(car.width) / car.height;
-            int area = car.width * car.height;
+    // resize the frame
+    Mat smallFrame;
+    resize(grayFrame, smallFrame, Size(grayFrame.cols / 2, grayFrame.rows / 2));
 
-            if (aspectRatio < 0.75 || aspectRatio > 3.0) continue; // Likely not a car
-            if (area < 1000) continue; // Skip tiny detections
+    vector<Rect> cars;
+    carCascade.detectMultiScale(
+        smallFrame,
+        cars,
+        1.25,              // Scale factor
+        2,                 // Increase minNeighbors to reduce false positives
+        0,
+        Size(20, 20)       // Minimum size
+    );
 
-            // Offset to place detection in original frame
-            car.x += roi.x;
-            car.y += roi.y;
-	
+    #pragma omp parallel for
+    for (size_t i = 0; i < cars.size(); ++i) {
+        Rect& car = cars[i];
+        car.x *= 2;  
+        car.y *= 2;  
+        car.width *= 2;
+        car.height *= 2;
+
+        // Filter false positives using aspect ratio and size
+        float aspectRatio = static_cast<float>(car.width) / car.height;
+        int area = car.width * car.height;
+
+        if (aspectRatio < 0.75 || aspectRatio > 3.0) continue; // Likely not a car
+        if (area < 1000) continue; // Skip tiny detections
+
+        // Offset to place detection in original frame
+        car.x += roi.x;
+        car.y += roi.y;
+
+        #pragma omp critical
+        {
             annotations_buffer.push_back(car);
         }
+        
+    }
+
+    return annotations_buffer;
 }
+
+
 
 /*
-#include "opencv2/imgcodecs.hpp"
-#include "opencv2/objdetect.hpp"
-#include "opencv2/highgui/highgui.hpp"
-#include "opencv2/imgproc.hpp"
-#include <iostream>
-#include <stdio.h>
-#include <stdlib.h>
-#include <time.h>
+#include <omp.h>
 
-#define ESCAPE_KEY (27)
+vector<Rect> CarDetector::detectCars(const Mat& Frame) {
+    vector<Rect> annotations_buffer;
 
-using namespace std;
-using namespace cv;
+    int frameHeight = Frame.rows;
+    int frameWidth = Frame.cols;
 
-int main(int argc, char** argv) {
-    if (argc < 2) {
-        cerr << "Usage: { <input file> }";
-        return -1;
-    }
-    string inputVideo = argv[1];
-    
-    struct timespec start, end, now;
-    int frame_count = 0;
-    float fps = 0;
-    int font_face = cv::FONT_HERSHEY_SIMPLEX;
-    double font_scale = 1.0;
-    cv::Scalar text_color(255, 255, 255); // White color
-    int thickness = 2;
+    // Define Region of Interest: exclude top 1/4 and bottom 1/5
+    Rect roi(0, frameHeight / 4, frameWidth, frameHeight - (frameHeight / 5) - (frameHeight / 4));
+    Mat roiFrame = Frame(roi);
 
-    VideoCapture cap(inputVideo);
-    namedWindow("video_display");
+    Mat grayFrame;
+    cvtColor(roiFrame, grayFrame, COLOR_BGR2GRAY);
+    equalizeHist(grayFrame, grayFrame);
 
-    if (!cap.isOpened()) {
-        cerr << "Error opening video";
-        return -1;
-    }
+    vector<Rect> cars;
+    carCascade.detectMultiScale(
+        grayFrame,
+        cars,
+        1.25,
+        2,
+        0,
+        Size(20, 20)
+    );
 
-    char winInput;
-    String cascadename = "./cars.xml";
-    CascadeClassifier carCascade;
+    // Create per-thread buffers
+    int n = cars.size();
+    vector<vector<Rect>> thread_buffers;
 
-    if (!carCascade.load(cascadename)) {
-        cerr << "Error loading cascade";
-        return -1;
-    }
+    #pragma omp parallel
+    {
+        vector<Rect> local_buffer;
 
-    clock_gettime(CLOCK_MONOTONIC, &start);
-    Mat frame;
-    while (cap.read(frame)) {
-    
-    	frame_count++;	
-    	
-    
-        int frameHeight = frame.rows;
-        int frameWidth = frame.cols;
+        #pragma omp for nowait
+        for (int i = 0; i < n; ++i) {
+            float aspectRatio = static_cast<float>(cars[i].width) / cars[i].height;
+            int area = cars[i].width * cars[i].height;
 
-        // Define Region of Interest: exclude top 1/4 and bottom 1/5
-        Rect roi(0, frameHeight / 4, frameWidth, frameHeight - (frameHeight / 5) - (frameHeight / 4));
-        Mat roiFrame = frame(roi);
+            if (aspectRatio < 0.75 || aspectRatio > 3.0) continue;
+            if (area < 1000) continue;
 
-        Mat grayFrame;
-        cvtColor(roiFrame, grayFrame, COLOR_BGR2GRAY);
-        equalizeHist(grayFrame, grayFrame);
+            Rect adjustedCar = cars[i];
+            adjustedCar.x += roi.x;
+            adjustedCar.y += roi.y;
 
-        vector<Rect> cars;
-        carCascade.detectMultiScale(
-            grayFrame,
-            cars,
-            1.25,              // Scale factor
-            2,                // Increase minNeighbors to reduce false positives
-            0,
-            Size(20, 20)      // Minimum size
-        );
-
-        for (auto& car : cars) {
-            // Filter false positives using aspect ratio and size
-            float aspectRatio = static_cast<float>(car.width) / car.height;
-            int area = car.width * car.height;
-
-            if (aspectRatio < 0.75 || aspectRatio > 3.0) continue; // Likely not a car
-            if (area < 1000) continue; // Skip tiny detections
-
-            // Offset to place detection in original frame
-            car.x += roi.x;
-            car.y += roi.y;
-
-            rectangle(frame, car, Scalar(0, 255, 0), 2);
+            local_buffer.push_back(adjustedCar);
         }
-        
-        clock_gettime(CLOCK_MONOTONIC, &now);
-    	
-    	// If the elapsed time is greater than 1 second
-    	if (now.tv_sec - start.tv_sec >= 1){
-    		fps = static_cast<float>(frame_count) / (now.tv_sec - start.tv_sec);
-    		frame_count = 0;
-    		clock_gettime(CLOCK_MONOTONIC, &start);
-    	}
-    	
-    	string frameText = "FPS: " + to_string(fps);
-    	
-    	putText(frame, frameText, Point(50,250), font_face, font_scale, text_color, thickness);
 
-        imshow("video_display", frame);
-
-        if ((winInput = waitKey(10)) == ESCAPE_KEY)
-            break;
+        #pragma omp critical
+        thread_buffers.push_back(local_buffer);
     }
 
-    cap.release();
-    destroyWindow("video_display");
-    return 0;
-}
-*/
+    // Merge all thread-local buffers
+    for (const auto& buf : thread_buffers) {
+        annotations_buffer.insert(annotations_buffer.end(), buf.begin(), buf.end());
+    }
 
+    return annotations_buffer;
+}
+
+*/

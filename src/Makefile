@@ -1,7 +1,7 @@
 # Compiler and flags
 CXX = g++
 
-CXXFLAGS = -std=c++17 -Wall -pthread \
+CXXFLAGS = -std=c++17 -Wall -pthread -fopenmp\
 	   -I/usr/include/opencv4 \
 	   -I$(SERVICES_DIR) \
 	   -I$(INCLUDE_DIR) \
@@ -10,11 +10,14 @@ CXXFLAGS = -std=c++17 -Wall -pthread \
 	   -I/usr/local/cuda/include \
 	   -I/usr/local/tensorrt/include \
 	   -Wno-deprecated-declarations \
+	   -O3 \
+	   -g
 
 LDFLAGS = $(shell pkg-config --libs opencv4) \
 	  -L/usr/local/cuda-12/lib64 \
 	  -L/usr/local/tensorrt/lib \
-	  -lcuda -lnvinfer -lnvinfer_plugin -lnvonnxparser -lcudart
+	  -lcuda -lnvinfer -lnvinfer_plugin -lnvonnxparser -lcudart \
+	  -lpthread -lopencv_core -lopencv_highgui -lopencv_imgproc
 
 # Directories
 SRC_DIR = .
@@ -32,12 +35,6 @@ TRAFFIC_LIGHTS_OBJ = $(BUILD_DIR)/traffic_lights.o
 $(TRAFFIC_LIGHTS_OBJ): $(TRAFFIC_LIGHTS_SRC) | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-# Build read_frame file
-READ_FRAME_SRC = $(SERVICES_DIR)/read_frame.cpp
-READ_FRAME_OBJ = $(BUILD_DIR)/read_frame.o
-$(READ_FRAME_OBJ): $(READ_FRAME_SRC) | $(BUILD_DIR)
-	$(CXX) $(CXXFLAGS) -c $< -o $@
-
 # Build the main file
 MAIN_SRC = main.cpp
 MAIN_OBJ = $(BUILD_DIR)/main.o
@@ -52,7 +49,7 @@ $(CAR_OBJ): $(CAR_SRC) | $(BUILD_DIR)
 
 
 # Build the executable
-$(SRC_DIR)/adas_app: $(MAIN_OBJ) $(READ_FRAME_OBJ) $(TRAFFIC_LIGHTS_OBJ) $(CAR_OBJ)
+$(SRC_DIR)/adas_app: $(MAIN_OBJ) $(TRAFFIC_LIGHTS_OBJ) $(CAR_OBJ)
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 
 # Create build directory if it doesn't exist
