@@ -1,7 +1,7 @@
 # Compiler and flags
 CXX = g++
 
-CXXFLAGS = -std=c++17 -Wall -pthread\
+CXXFLAGS = -std=c++17 -Wall -pthread -fopenmp\
 	   -I/usr/include/opencv4 \
 	   -I$(SERVICES_DIR) \
 	   -I$(INCLUDE_DIR) \
@@ -9,7 +9,9 @@ CXXFLAGS = -std=c++17 -Wall -pthread\
 	   $(shell pkg-config --cflags opencv4) \
 	   -I/usr/local/cuda/include \
 	   -I/usr/local/tensorrt/include \
-	   -Wno-deprecated-declarations 
+	   -Wno-deprecated-declarations \
+	   -O3 \
+	   -g
 
 LDFLAGS = $(shell pkg-config --libs opencv4) \
 	  -L/usr/local/cuda-12/lib64 \
