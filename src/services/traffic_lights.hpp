@@ -22,7 +22,7 @@ public:
 
     std::vector<Detection> inferenceLoop(cv::Mat& frame);
 private:
-    std::vector<Detection> postprocessImage(float* output, int num_detections, float conf_thresh, float nms_thresh);
+    std::vector<Detection> postprocessImage(float* output, int num_detections, float conf_thresh, float nms_thresh, float rescale_factor_x, float rescale_factor_y);
     float computeIoU(const Detection& a, const Detection& b);
     void saveEngine(const std::string& filePath, IHostMemory* serializedModel);
     bool loadEngine(const std::string& filePath);

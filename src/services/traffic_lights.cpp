@@ -145,7 +145,7 @@ TrafficLights::~TrafficLights() {
 }
 
 
-std::vector<Detection> TrafficLights::postprocessImage(float* output, int num_detections, float conf_thresh, float nms_thresh){
+std::vector<Detection> TrafficLights::postprocessImage(float* output, int num_detections, float conf_thresh, float nms_thresh, float rescale_factor_x, float rescale_factor_y){
 	std::vector<Detection> detections;
 
 	// confidence thresholding	
@@ -162,16 +162,16 @@ std::vector<Detection> TrafficLights::postprocessImage(float* output, int num_de
 		if (class_id == 3) continue; // ignore background class
 		
 		Detection d;
-		d.x = det[0];
-		d.y = det[1];
-		d.w = det[2];
-		d.h = det[3];
+		d.x = det[0] * rescale_factor_x;
+		d.y = det[1] * rescale_factor_y;
+		d.w = det[2] * rescale_factor_x;
+		d.h = det[3] 8 rescale_factor_y;
 		d.conf = final_conf;
 		d.class_id = class_id;
 		detections.push_back(d);
 	}
 
-    // 00printf("Number of detections after confidence thresholding: %zu\n", detections.size());
+    // printf("Number of detections after confidence thresholding: %zu\n", detections.size());
 	// NMS
 	std::sort(detections.begin(), detections.end(), [](const Detection& a, const Detection& b){
 		return a.conf > b.conf;
@@ -189,7 +189,7 @@ std::vector<Detection> TrafficLights::postprocessImage(float* output, int num_de
 		}
 	}
 
-	// rintf("Number of detections after NMS: %zu\n", results.size());
+	printf("Number of detections after NMS: %zu\n", results.size());
 
 	return results;
 }
@@ -209,70 +209,31 @@ float TrafficLights::computeIoU(const Detection& a, const Detection& b){
 std::vector<Detection> TrafficLights::inferenceLoop(cv::Mat& frame) {
 
 	// preprocess the image
-    cv::Mat resized, rgb, float_img;
+    cv::Mat resized, resized_rgb, float_img;
 	int input_w = 736, input_h = 736;
-
 
 	if(frame.empty()) {
 		std::cerr << "Error: Empty frame received for inference." << std::endl;
 		return {};
 	}
 
-	cv::Mat frame_float;
-	frame.convertTo(frame_float, CV_32FC3, 1.0f / 255.0);
-	// for (int i = 0; i < 10; i++) {
-	// 	printf("frame[%d] = %f\n", i, frame.at<float>(i));  // Inspect first 10 values
-	// }
+	float scale x = 
 
+
+	// Yolo Preprcoessing
     cv::resize(frame, resized, cv::Size(input_w, input_h));
-    cv::cvtColor(resized, rgb, cv::COLOR_BGR2RGB);
-    rgb.convertTo(float_img, CV_32FC3, 1.0f / 255.0);
-
-	// for (int i = 0; i < 10; i++) {
-	// 	printf("float_img[%d] = %f\n", i, float_img.at<float>(i));  // Inspect first 10 values
-	// }
+	cv::imshow(resized, "resized");
+    cv::cvtColor(resized, resized_rgb, cv::COLOR_BGR2RGB);
+	 
+    resized_rgb.convertTo(float_img, CV_32FC3, 1.0f / 255.0);
 
 	std::vector<float> gpu_input(3 * input_h * input_w);
 	
-	// Reorder the channels
+	// Split channels
 	std::vector<cv::Mat> chw(3);
 	for (int i = 0; i < 3; i++)
 			chw[i] = cv::Mat(input_h, input_w, CV_32FC1, gpu_input.data() + i * input_h * input_w);
 	cv::split(float_img, chw);
-
-
-	//////// DEBUG
-
-	// // Allocate GPU memory for input
-	// void* db_input_mem = nullptr;
-	// int db_input_size = gpu_input.size() * sizeof(float);
-	// cudaMalloc(&db_input_mem, db_input_size);
-
-	// // Copy input data from host (gpu_input) to device (input_mem)
-	// cudaMemcpy(db_input_mem, gpu_input.data(), db_input_size, cudaMemcpyHostToDevice);
-
-	// std::vector<float> cpu_input(gpu_input.size());
-	// cudaMemcpy(cpu_input.data(), db_input_mem, db_input_size, cudaMemcpyDeviceToHost);
-	// int print_count = 10;  // Print first 10 values for debugging
-	// for (int i = 0; i < print_count; ++i) {
-	// 	// Print values from each channel (you can adjust this loop for more/less printing)
-	// 	printf("Input[%d] = %f\n", i, cpu_input[i]);
-	// }
-
-	// bool is_valid_range = true;
-
-	// for (float val : cpu_input) {
-	// 	if (val < 0.0f || val > 1.0f) {
-	// 		printf("Out of range value detected: %f\n", val);
-	// 		is_valid_range = false;
-	// 		break;
-	// 	}
-	// }
-	// if (is_valid_range) {
-	// 	printf("All input values are within the [0, 1] range.\n");
-	// }
-	
-	///////// END DEBUG
 
 	// Set up the execution context input
 	char const* input_name = "images";
@@ -311,6 +272,8 @@ std::vector<Detection> TrafficLights::inferenceLoop(cv::Mat& frame) {
 	
 	std::vector<Detection> detections = postprocessImage(output_buffer.get(), 10, 0.3, 0.3);
 
+
+	// Show detections on image, make sure that the annotations are rescaled to the input frame image size
 	return detections;
 
 }
