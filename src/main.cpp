@@ -46,7 +46,7 @@ int main() {
     frameReaderArgs.frameBuffer = &frameBuffer;
     frameReaderArgs.source = "../../video.mp4";
     frameReaderArgs.frameReadyFlag = &uFrameReadyFlag;
-    frameReaderArgs.numServices = 3;                             // CRITICAL: needs to be # of annotation services + 1 draw service
+    frameReaderArgs.numServices = 3;     // 4                        // CRITICAL: needs to be # of annotation services + 1 draw service
     frameReaderArgs.stopFlag = &stopFlag;
 
     pthread_t frameReaderThreadID;
@@ -84,14 +84,29 @@ int main() {
     pthread_create(&carDetectionThreadID, nullptr, ServiceWrapperThread<cv::Rect>, &carDetectionArgs);
     setThreadAffinity(carDetectionThreadID, 2);
 
+    // // // Pedestrains detection service
+    // CarDetector detector("./cars.xml");
+    // serviceWrapperArgs<cv::Rect> carDetectionArgs;
+    // carDetectionArgs.processFunction = [&detector](cv::Mat& frame) { return detector.detectCars(frame); };
+    // carDetectionArgs.frameBuffer = &frameBuffer;
+    // carDetectionArgs.outputStore = &vCarAnnotations;
+    // carDetectionArgs.frameReadyFlag = &uFrameReadyFlag;
+    // carDetectionArgs.processingDoneFlag = &uProcessingDoneFlag;
+    // carDetectionArgs.activeBit = 0x04;                // Need to be unique bit for each service
+    // carDetectionArgs.stopFlag = &stopFlag;
+
+    // pthread_t carDetectionThreadID;
+    // pthread_create(&carDetectionThreadID, nullptr, ServiceWrapperThread<cv::Rect>, &carDetectionArgs);
+    // setThreadAffinity(carDetectionThreadID, 2);
+
   // Draw frame service
     DrawFrameArgs drawFrameArgs;
     drawFrameArgs.frameBuffer = &frameBuffer;
     drawFrameArgs.windowName = "Annotated Frame";
     drawFrameArgs.frameReadyFlag = &uFrameReadyFlag;
     drawFrameArgs.processingDoneFlag = &uProcessingDoneFlag;
-    drawFrameArgs.activeBit = 0x04;                     // Need to be unique bit for each service    
-    drawFrameArgs.numServices = 2;                              // CRITICAL: needs to be # of annotation services
+    drawFrameArgs.activeBit = 0x04;     // 0x08   // Need to be unique bit for each service    
+    drawFrameArgs.numServices = 2;      // 3   // CRITICAL: needs to be # of annotation services
     drawFrameArgs.stopFlag = &stopFlag;
     drawFrameArgs.trafficLights = &vTrafficLightsAnnotations;
     drawFrameArgs.cars = &vCarAnnotations;

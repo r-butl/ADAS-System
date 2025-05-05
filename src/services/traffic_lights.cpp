@@ -100,7 +100,6 @@ TrafficLights::TrafficLights(const std::string& onnxPath)
 		std::cout << parser->getError(i)->desc() << std::endl;
     	}
 
-
     	// Builder config
     	IBuilderConfig* config = builder->createBuilderConfig();
     	config->setMemoryPoolLimit(MemoryPoolType::kWORKSPACE, 400U << 20);
@@ -165,13 +164,13 @@ std::vector<Detection> TrafficLights::postprocessImage(float* output, int num_de
 		d.x = det[0] * rescale_factor_x;
 		d.y = det[1] * rescale_factor_y;
 		d.w = det[2] * rescale_factor_x;
-		d.h = det[3] 8 rescale_factor_y;
+		d.h = det[3] * rescale_factor_y;
 		d.conf = final_conf;
 		d.class_id = class_id;
 		detections.push_back(d);
 	}
 
-    // printf("Number of detections after confidence thresholding: %zu\n", detections.size());
+    printf("Number of detections after confidence thresholding: %zu\n", detections.size());
 	// NMS
 	std::sort(detections.begin(), detections.end(), [](const Detection& a, const Detection& b){
 		return a.conf > b.conf;
@@ -189,7 +188,7 @@ std::vector<Detection> TrafficLights::postprocessImage(float* output, int num_de
 		}
 	}
 
-	printf("Number of detections after NMS: %zu\n", results.size());
+	//printf("Number of detections after NMS: %zu\n", results.size());
 
 	return results;
 }
@@ -217,14 +216,12 @@ std::vector<Detection> TrafficLights::inferenceLoop(cv::Mat& frame) {
 		return {};
 	}
 
-	float scale x = 
-
+	float scale_x = static_cast<float>(frame.cols) / input_w;
+	float scale_y = static_cast<float>(frame.rows) / input_h;
 
 	// Yolo Preprcoessing
     cv::resize(frame, resized, cv::Size(input_w, input_h));
-	cv::imshow(resized, "resized");
     cv::cvtColor(resized, resized_rgb, cv::COLOR_BGR2RGB);
-	 
     resized_rgb.convertTo(float_img, CV_32FC3, 1.0f / 255.0);
 
 	std::vector<float> gpu_input(3 * input_h * input_w);
@@ -270,8 +267,7 @@ std::vector<Detection> TrafficLights::inferenceLoop(cv::Mat& frame) {
 	cudaFree(input_mem);
 	cudaFree(output_mem);
 	
-	std::vector<Detection> detections = postprocessImage(output_buffer.get(), 10, 0.3, 0.3);
-
+	std::vector<Detection> detections = postprocessImage(output_buffer.get(), 10, 0.3, 0.3, scale_x, scale_y);
 
 	// Show detections on image, make sure that the annotations are rescaled to the input frame image size
 	return detections;

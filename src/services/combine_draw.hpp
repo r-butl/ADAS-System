@@ -23,6 +23,7 @@ struct DrawFrameArgs {
     std::atomic<uint8_t>* processingDoneFlag;
     uint8_t activeBit;
     int numServices;
+    // annotations
     std::atomic<bool>* stopFlag;
     std::vector<Detection>* trafficLights;
     std::vector<Rect>* cars;
@@ -62,10 +63,11 @@ void* DrawFrameThread(void* arg) {
 
         // Wait for the processingDoneFlag to be set to 0
         while ((*processingDoneFlag & bitmask) != bitmask && !stopFlag->load()) {
-            //std::this_thread::sleep_for(std::chrono::milliseconds(1)); // Sleep for 1 ms
+            std::this_thread::sleep_for(std::chrono::milliseconds(1)); // Sleep for 1 ms
         }
 
         /////////////////////////// Annotations ///////////////////////////
+
         // Draw traffic lights annotations
         for (const auto& annotation : *args->trafficLights) {
             cv::rectangle(frame, cv::Point(annotation.x, annotation.y), 
