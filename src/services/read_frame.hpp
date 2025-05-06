@@ -61,7 +61,7 @@ void* frameReaderThread(void* arg) {
                 while ((frameReadyFlag->load() & bitmask) != 0) {
                         //sched_yield(); // Yield the CPU to other threads
                         //printf("Frame Ready Flag: %d\n", frameReadyFlag->load());
-                        //std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                        std::this_thread::sleep_for(std::chrono::milliseconds(1));
                 }
 
                 //std::cout << "Writing frame." << std::endl;

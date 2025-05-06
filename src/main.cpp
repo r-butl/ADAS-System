@@ -44,7 +44,7 @@ int main() {
 
     FrameReaderArgs frameReaderArgs;
     frameReaderArgs.frameBuffer = &frameBuffer;
-    frameReaderArgs.source = "../../video.mp4";
+    frameReaderArgs.source = "../../validate_video.mp4";
     frameReaderArgs.frameReadyFlag = &uFrameReadyFlag;
     frameReaderArgs.numServices = 3;     // 4                        // CRITICAL: needs to be # of annotation services + 1 draw service
     frameReaderArgs.stopFlag = &stopFlag;

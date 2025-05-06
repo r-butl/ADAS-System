@@ -35,7 +35,7 @@ private:
     cudaStream_t stream;
     void* buffers[2]; // input , output
     int inputIndex, outputIndex;
-    int inputW = 720, inputH = 720;
+    int inputW = 1088, inputH = 1088;
     int outputSize = 8400;
 };
 

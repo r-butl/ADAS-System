@@ -5,6 +5,7 @@
 #include "traffic_lights.hpp"
 #include <numeric>
 #include <functional>
+#include <opencv2/opencv.hpp>
 
 #include <cuda_runtime.h>
 
@@ -149,16 +150,26 @@ std::vector<Detection> TrafficLights::postprocessImage(float* output, int num_de
 
 	// confidence thresholding	
 	for (int i = 0; i < num_detections; i++) {
-		float* det = &output[i * 9];
+
+
+		for (int i = 0; i < num_detections; ++i) {
+			printf("Detection %d: ", i);
+			for (int j = 0; j < 8; ++j) {
+				printf("%.3f ", output[i * 8 + j]);
+			}
+			printf("\n");
+		}
+
+		float* det = &output[i * 8]; // x, y, w, h, conf, class0, class1, class2
 		float obj_conf = det[4];
+
 		if (obj_conf < conf_thresh) continue;
 
 		float* class_scores = &det[5];
-		int class_id = std::max_element(class_scores, class_scores + 4) - class_scores;
+		int class_id = std::max_element(class_scores, class_scores + 3) - class_scores;
 		float class_conf = class_scores[class_id];
 		float final_conf = obj_conf * class_conf;
 		if (final_conf < conf_thresh) continue;
-		if (class_id == 3) continue; // ignore background class
 		
 		Detection d;
 		d.x = det[0] * rescale_factor_x;
@@ -209,33 +220,42 @@ std::vector<Detection> TrafficLights::inferenceLoop(cv::Mat& frame) {
 
 	// preprocess the image
     cv::Mat resized, resized_rgb, float_img;
-	int input_w = 736, input_h = 736;
+	//int input_w = 736, input_h = 736;
 
 	if(frame.empty()) {
 		std::cerr << "Error: Empty frame received for inference." << std::endl;
 		return {};
 	}
 
-	float scale_x = static_cast<float>(frame.cols) / input_w;
-	float scale_y = static_cast<float>(frame.rows) / input_h;
+	float scale_x = static_cast<float>(frame.cols) / inputW;
+	float scale_y = static_cast<float>(frame.rows) / inputH;
 
 	// Yolo Preprcoessing
-    cv::resize(frame, resized, cv::Size(input_w, input_h));
+    cv::resize(frame, resized, cv::Size(inputW, inputH));
     cv::cvtColor(resized, resized_rgb, cv::COLOR_BGR2RGB);
     resized_rgb.convertTo(float_img, CV_32FC3, 1.0f / 255.0);
 
-	std::vector<float> gpu_input(3 * input_h * input_w);
+
+	// DEBUG
+	// cv::Mat gray;
+	// cv::cvtColor(float_img, gray, cv::COLOR_RGB2GRAY);
+	// double minVal, maxVal;
+	// cv::Point minLoc, maxLoc;
+	// cv::minMaxLoc(gray, &minVal, &maxVal, &minLoc, &maxLoc);
+	// std::cout << "Min: " << minVal << " Max: " << maxVal << std::endl;
+	
+	std::vector<float> gpu_input(3 * inputH * inputW);
 	
 	// Split channels
 	std::vector<cv::Mat> chw(3);
 	for (int i = 0; i < 3; i++)
-			chw[i] = cv::Mat(input_h, input_w, CV_32FC1, gpu_input.data() + i * input_h * input_w);
+			chw[i] = cv::Mat(inputH, inputW, CV_32FC1, gpu_input.data() + i * inputH * inputW);
 	cv::split(float_img, chw);
 
 	// Set up the execution context input
 	char const* input_name = "images";
 	assert(engine->getTensorDataType(input_name) == nvinfer1::DataType::kFLOAT);
-	auto input_dims = nvinfer1::Dims4{1, /* channels */ 3, input_h, input_w};
+	auto input_dims = nvinfer1::Dims4{1, /* channels */ 3, inputH, inputW};
 	context->setInputShape(input_name, input_dims);
 	int input_size = std::accumulate(input_dims.d, input_dims.d + input_dims.nbDims, 1, std::multiplies<int>()) * sizeof(float);
 

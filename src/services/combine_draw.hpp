@@ -108,6 +108,8 @@ void* DrawFrameThread(void* arg) {
             *stopFlag = true;
         }
 
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000)); // Sleep for 1 ms
+
 
     }
 
