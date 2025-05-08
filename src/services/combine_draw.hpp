@@ -48,9 +48,12 @@ void* DrawFrameThread(void* arg) {
 
     uint8_t bitmask = (1 << args->numServices) - 1; // Create a bitmask for the number of services
     cv::Mat frame;
-    auto lastTime = std::chrono::high_resolution_clock::now(); // Initialize the timer
-    double fps = 0.0;
- 
+
+    double avgFps = 0.0;
+    const int fpsSampleSize = 30;
+    std::vector<double> fpsHistory;
+    fpsHistory.reserve(fpsSampleSize); 
+    auto lastTime = std::chrono::high_resolution_clock::now();
     while (!stopFlag->load()) {
 
         // Wait for the frameReadyFlag to be set to 1
@@ -90,14 +93,22 @@ void* DrawFrameThread(void* arg) {
         // Flip the processingDoneFlag to 0
         processingDoneFlag->store(0);
 
-        // Calculate FPS
+        // Inside the loop, replace the current FPS block with:
         auto currentTime = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double> elapsed = currentTime - lastTime;
         lastTime = currentTime;
-        fps = 1.0 / elapsed.count();
+        double currentFps = 1.0 / elapsed.count();
+
+        fpsHistory.push_back(currentFps);
+        if (fpsHistory.size() > fpsSampleSize) {
+            fpsHistory.erase(fpsHistory.begin());
+        }
+        double sum = 0.0;
+        for (double f : fpsHistory) sum += f;
+        avgFps = sum / fpsHistory.size();
 
         // Draw FPS on the frame
-        std::string fpsText = "FPS: " + std::to_string(static_cast<int>(fps));
+        std::string fpsText = "FPS: " + std::to_string(static_cast<int>(avgFps));
         cv::putText(frame, fpsText, cv::Point(10, 30), cv::FONT_HERSHEY_SIMPLEX, 1.0, cv::Scalar(0, 255, 0), 2);
         
         // Display the frame
@@ -119,34 +130,3 @@ void* DrawFrameThread(void* arg) {
     return nullptr;
 }
 #endif
-
-
-// template <typename T>
-// void drawAnnotations(cv::Mat& image, const std::vector<T>& annotations) {
-//     for (const auto& annotation : annotations) {
-//         cv::rectangle(image, cv::Point(annotation.x, annotation.y), 
-//                       cv::Point(annotation.x + annotation.w, annotation.y + annotation.h), 
-//                       cv::Scalar(0, 255, 0), 2); // green boxes, thickness=2
-//     }
-// }
-
-// std::vector<cv::Rect> detectionsToRects(const std::vector<Detection>& detections) {
-//     std::vector<cv::Rect> rects;
-//     rects.reserve(detections.size()); // reserve memory
-
-//     for (const auto& det : detections) {
-//         int x = static_cast<int>(det.x);
-//         int y = static_cast<int>(det.y);
-//         int w = static_cast<int>(det.w);
-//         int h = static_cast<int>(det.h);
-//         rects.emplace_back(x, y, w, h);
-//     }
-
-//     return rects;
-// }
-
-// void drawRectangles(cv::Mat& image, const std::vector<cv::Rect>& rects) {
-//     for (const auto& rect : rects) {
-//         cv::rectangle(image, rect, cv::Scalar(0, 255, 0), 2); // green boxes, thickness=2
-//     }
-// }

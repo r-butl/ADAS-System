@@ -112,6 +112,7 @@ SimplePeopleDetector::SimplePeopleDetector(const std::string& onnxPath)
     	IBuilderConfig* config = builder->createBuilderConfig();
     	config->setMemoryPoolLimit(MemoryPoolType::kWORKSPACE, 400U << 20);
     	config->setMemoryPoolLimit(MemoryPoolType::kTACTIC_SHARED_MEMORY, 64U << 10);
+        config->setFlag(nvinfer1::BuilderFlag::kFP16);
 
     	// Build deserialized engine
     	IHostMemory* serializedModel = builder->buildSerializedNetwork(*network, *config);
