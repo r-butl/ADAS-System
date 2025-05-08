@@ -25,7 +25,7 @@ struct DrawFrameArgs {
     int numServices;
     // annotations
     std::atomic<bool>* stopFlag;
-    std::vector<Detection>* trafficLights;
+    std::vector<Rect>* trafficLights;
     std::vector<Rect>* people;
     std::vector<Rect>* cars;
 };
@@ -70,11 +70,10 @@ void* DrawFrameThread(void* arg) {
         /////////////////////////// Annotations ///////////////////////////
 
         // Draw traffic lights annotations
-        for (const auto& annotation : *args->trafficLights) {
-            cv::rectangle(frame, cv::Point(annotation.x, annotation.y), 
-                          cv::Point(annotation.x + annotation.w, annotation.y + annotation.h), 
-                          cv::Scalar(0, 255, 0), 2); // green boxes, thickness=2
-        }
+        for (const auto& rect : *args->trafficLights) {
+                cv::rectangle(frame, rect, cv::Scalar(0, 255, 0), 2); // red boxes, thickness=2
+            }
+    
 
         // draw cars annotations
         for (const auto& rect: *args->people) {
@@ -113,6 +112,7 @@ void* DrawFrameThread(void* arg) {
             *stopFlag = true;
         }
 
+        cv::waitKey(1000);
 
     }
 

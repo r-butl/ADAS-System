@@ -250,10 +250,10 @@ std::vector<cv::Rect> SimplePeopleDetector::detect(const Mat& frame) {
             float confidence = det[4];
             if (confidence < 0.5f) continue;
 
-            if (valid < 5) {
-                std::cout << "[DEBUG] Detection " << i << " - Conf: " << confidence
-                            << ", Box: [" << det[0] << ", " << det[1] << ", " << det[2] << ", " << det[3] << "]" << std::endl;
-            }
+            // if (valid < 5) {
+            //     std::cout << "[DEBUG] Detection " << i << " - Conf: " << confidence
+            //                 << ", Box: [" << det[0] << ", " << det[1] << ", " << det[2] << ", " << det[3] << "]" << std::endl;
+            // }
             valid++;
         }
 

@@ -1,34 +1,39 @@
-#include <fstream>
-#include "cuda_runtime_api.h"
-#include <iostream>
-#include <vector>
 #include "traffic_lights.hpp"
+
+#include <iostream>
+#include <fstream>
+#include <vector>
+#include <string>
+#include <chrono>
 #include <numeric>
 #include <functional>
-#include <opencv2/opencv.hpp>
+#include <algorithm>
+#include <cstring>
+#include <cctype>
 
-#include <cuda_runtime.h>
+#include <opencv2/core/core.hpp>
+#include <opencv2/highgui/highgui.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
 
 #include <NvInfer.h>
+#include <NvInferRuntimeCommon.h>
+#include <cuda_runtime_api.h>
 #include "NvOnnxParser.h"
 
-using namespace nvonnxparser;
+using namespace cv;
+using namespace std;
 using namespace nvinfer1;
+using namespace nvonnxparser;
 
-class Logger : public nvinfer1::ILogger {
+#define CHECK(status) do { auto ret = (status); if (ret != 0) cerr << "CUDA error: " << ret << endl; } while(0)
+
+class SimpleLogger : public ILogger {
     void log(Severity severity, const char* msg) noexcept override {
-        switch (severity) {
-        case Severity::kINTERNAL_ERROR: std::cerr << "INTERNAL_ERROR: " << msg << std::endl; break;
-        case Severity::kERROR:         std::cerr << "ERROR: " << msg << std::endl; break;
-        case Severity::kWARNING:       std::cerr << "WARNING: " << msg << std::endl; break;
-        case Severity::kINFO:          std::cout << "INFO: " << msg << std::endl; break;
-        case Severity::kVERBOSE:       std::cout << "VERBOSE: " << msg << std::endl; break;
-        default:                       std::cout << "UNKNOWN: " << msg << std::endl; break;
-        }
+        if (severity <= Severity::kWARNING) std::cerr << "[TRT] " << msg << std::endl;
     }
 };
 
-Logger gLogger;
+static SimpleLogger gLogger;
 
 void TrafficLights::saveEngine(const std::string& filePath, IHostMemory* serializedModel) {
 
@@ -88,6 +93,8 @@ TrafficLights::TrafficLights(const std::string& onnxPath)
 
     std::string saveFileName = "tl_detect.engine";
     if(!loadEngine(saveFileName.c_str())){
+
+        printf("Creating engine...\n");
 	    // Build the engine
     	IBuilder* builder = createInferBuilder(gLogger);
     	INetworkDefinition* network = builder->createNetworkV2(0);
@@ -137,6 +144,32 @@ TrafficLights::TrafficLights(const std::string& onnxPath)
     	delete runtime;
 	
 	}
+    cudaStreamCreate(&stream);
+
+    for (int i = 0; i < engine->getNbIOTensors(); ++i) {
+        const char* name = engine->getIOTensorName(i);
+        if (engine->getTensorIOMode(name) == TensorIOMode::kINPUT && !input_tensor_name_) {
+            input_tensor_name_ = name;
+            std::cout << "[DEBUG] Input tensor name: " << input_tensor_name_ << std::endl;
+        } else if (engine->getTensorIOMode(name) == TensorIOMode::kOUTPUT && !output_tensor_name_) {
+            output_tensor_name_ = name;
+            std::cout << "[DEBUG] Output tensor name: " << output_tensor_name_ << std::endl;
+        }
+    }
+
+    if (!input_tensor_name_ || !output_tensor_name_) {
+        cerr << "ERROR: Failed to find input/output tensor names." << endl; return;
+    }
+
+    Dims d = engine->getTensorShape(input_tensor_name_);
+    printf("Input h: %d Input w: %d\n", d.d[2], d.d[3]);
+
+    if (d.nbDims == 4 && d.d[0] == 1 && d.d[1] == 3) {
+        network_input_h_ = d.d[2];
+        network_input_w_ = d.d[3];
+    } else {
+        cout << "ERROR: Unexpected input dimensions." << endl;
+    }
 }
 
 TrafficLights::~TrafficLights() {
@@ -144,190 +177,114 @@ TrafficLights::~TrafficLights() {
     if (engine) delete engine;
 }
 
-
-std::vector<Detection> TrafficLights::postprocessImage(float* output, int num_detections, float conf_thresh, float nms_thresh, float rescale_factor_x, float rescale_factor_y){
-	std::vector<Detection> detections;
-
-	// confidence thresholding	
-	for (int i = 0; i < num_detections; i++) {
-
-		for (int i = 0; i < num_detections; ++i) {
-			printf("Detection %d: ", i);
-			for (int j = 0; j < 8; ++j) {
-				printf("%.3f ", output[i * 8 + j]);
-			}
-			printf("\n");
-		}
-
-		float* det = &output[i * 8]; // x, y, w, h, conf, class0, class1, class2
-		float obj_conf = det[4];
-
-		if (obj_conf < conf_thresh) continue;
-
-		float* class_scores = &det[5];
-		int class_id = std::max_element(class_scores, class_scores + 3) - class_scores;
-		float class_conf = class_scores[class_id];
-		float final_conf = obj_conf * class_conf;
-		if (final_conf < conf_thresh) continue;
-		
-		Detection d;
-		d.x = det[0] * rescale_factor_x;
-		d.y = det[1] * rescale_factor_y;
-		d.w = det[2] * rescale_factor_x;
-		d.h = det[3] * rescale_factor_y;
-		d.conf = final_conf;
-		d.class_id = class_id;
-		detections.push_back(d);
-	}
-
-    //printf("Number of detections after confidence thresholding: %zu\n", detections.size());
-	// NMS
-	std::sort(detections.begin(), detections.end(), [](const Detection& a, const Detection& b){
-		return a.conf > b.conf;
-	});
-
-	std::vector<Detection> results;
-	std::vector<bool> suppressed(detections.size(), false);
-
-	for (size_t i = 0; i < detections.size(); ++i){
-		if (suppressed[i]) continue;
-		results.push_back(detections[i]);
-		for (size_t j = i + 1; j < detections.size(); ++j){
-			if (suppressed[j]) continue;
-			if (computeIoU(detections[i], detections[j]) > nms_thresh) suppressed[j] = true;
-		}
-	}
-
-	//printf("Number of detections after NMS: %zu\n", results.size());
-
-	return results;
+bool TrafficLights::isInitialized() const {
+    return runtime && engine && context && stream && network_input_h_ > 0 && network_input_w_ > 0;
 }
 
-float TrafficLights::computeIoU(const Detection& a, const Detection& b){
-
-	float x1 = std::max(a.x - a.w / 2, b.x - b.w / 2);
-	float y1 = std::max(a.y - a.h / 2, b.y - b.h / 2);
-	float x2 = std::max(a.x + a.w / 2, b.x + b.w / 2);
-	float y2 = std::max(a.x + a.w / 2, b.x + b.w / 2);
-
-	float inter_area = std::max(0.0f, x2 - x1) * std::max(0.0f, y2 - y1);
-	float union_area = a.w * a.h + b.w * b.h - inter_area;
-	return union_area > 0 ? inter_area / union_area : 0.0f;
+size_t TrafficLights::calculateSizeFromDims(const Dims& dims) {
+    size_t size = 1;
+    for (int i = 0; i < dims.nbDims; ++i) {
+        if (dims.d[i] < 0) return 0;
+        size *= dims.d[i];
+    }
+    return size;
 }
-std::vector<Detection> TrafficLights::inferenceLoop(cv::Mat& frame) {
 
-    // preprocess the image
-    cv::Mat resized, resized_rgb, float_img;
+void TrafficLights::preprocess(const Mat& frame, std::vector<float>& cpu_input_buffer, int input_w, int input_h) {
+    Mat resized, rgb;
+    resize(frame, resized, Size(input_w, input_h));
+    cvtColor(resized, rgb, COLOR_BGR2RGB);
+    rgb.convertTo(rgb, CV_32F, 1.0 / 255.0);
 
-    if (frame.empty()) {
-        std::cerr << "Error: Empty frame received for inference." << std::endl;
-        return {};
+    cpu_input_buffer.resize(3 * input_h * input_w);
+    vector<Mat> channels(3);
+    split(rgb, channels);
+
+    float* ptr = cpu_input_buffer.data();
+    for (int c = 0; c < 3; ++c) {
+        memcpy(ptr, channels[c].data, input_h * input_w * sizeof(float));
+        ptr += input_h * input_w;
     }
+}
 
-    // Rescale factors to map to the original frame dimensions
-    float scale_x =  inputW / static_cast<float>(frame.cols);
-    float scale_y =  inputH / static_cast<float>(frame.rows);
+std::vector<cv::Rect> TrafficLights::detect(const Mat& frame) {
 
-    // Yolo Preprocessing
-    cv::resize(frame, resized, cv::Size(inputW, inputH));
-    cv::cvtColor(resized, resized_rgb, cv::COLOR_BGR2RGB);
-    resized_rgb.convertTo(float_img, CV_32FC3, 1.0f / 255.0);
+    vector<float> input;
+    vector<float> output;
+    vector<cv::Rect> detections;
+    float conf_threshold = 0.3;
 
-    std::vector<float> gpu_input(3 * inputH * inputW);
+    preprocess(frame, input, network_input_w_, network_input_h_);
+    
+    context->setInputShape(input_tensor_name_, Dims4{1, 3, network_input_h_, network_input_w_});
+    Dims in_dims = context->getTensorShape(input_tensor_name_);
+    Dims output_dims = context->getTensorShape(output_tensor_name_);
 
-    // Split channels
-    std::vector<cv::Mat> chw(3);
-    for (int i = 0; i < 3; i++) {
-        chw[i] = cv::Mat(inputH, inputW, CV_32FC1, gpu_input.data() + i * inputH * inputW);
-    }
-    cv::split(float_img, chw);
+    size_t in_size = calculateSizeFromDims(in_dims) * sizeof(float);
+    size_t out_size = calculateSizeFromDims(output_dims) * sizeof(float);
 
-    // Set up the execution context input
-    char const* input_name = "images";
-    assert(engine->getTensorDataType(input_name) == nvinfer1::DataType::kFLOAT);
-    auto input_dims = nvinfer1::Dims4{1, 3, inputH, inputW};
-    context->setInputShape(input_name, input_dims);
-    int input_size = std::accumulate(input_dims.d, input_dims.d + input_dims.nbDims, 1, std::multiplies<int>()) * sizeof(float);
+    output.resize(out_size / sizeof(float));
 
-    // Set up the output context
-    char const* output_name = "output0";
-    auto output_dims = context->getTensorShape(output_name);
-    int output_size = std::accumulate(output_dims.d, output_dims.d + output_dims.nbDims, 1, std::multiplies<int>()) * sizeof(float);
+    void* d_in = nullptr; void* d_out = nullptr;
+    CHECK(cudaMalloc(&d_in, in_size));
+    CHECK(cudaMalloc(&d_out, out_size));
+    CHECK(cudaMemcpyAsync(d_in, input.data(), in_size, cudaMemcpyHostToDevice, stream));
 
-    // Allocate memory on the GPU for the operation
-    void* input_mem{nullptr};
-    cudaMalloc(&input_mem, input_size);
-    void* output_mem{nullptr};
-    cudaMalloc(&output_mem, output_size);
-
-    // Set up the CUDA stream
-    cudaStream_t stream;
-    cudaStreamCreate(&stream);  
-    cudaMemcpyAsync(input_mem, gpu_input.data(), input_size, cudaMemcpyHostToDevice, stream);
-
-    // Run the inference
-    context->setTensorAddress(input_name, input_mem);
-    context->setTensorAddress(output_name, output_mem);
-    bool status = context->enqueueV3(stream);
-    auto output_buffer = std::unique_ptr<float[]>{new float[output_size / sizeof(float)]};
-    cudaMemcpyAsync(output_buffer.get(), output_mem, output_size, cudaMemcpyDeviceToHost, stream);
+    context->setTensorAddress(input_tensor_name_, d_in);
+    context->setTensorAddress(output_tensor_name_, d_out);
+    context->enqueueV3(stream);
+    CHECK(cudaMemcpyAsync(output.data(), d_out, out_size, cudaMemcpyDeviceToHost, stream));
     cudaStreamSynchronize(stream);
+    cudaFree(d_in);
+    cudaFree(d_out);
 
-    cudaFree(input_mem);
-    cudaFree(output_mem);
+    if (!output.empty()){
+        int count = 0;
+        const int props = 6;
+        if (output_dims.nbDims == 3 && output_dims.d[2] == props) count = output_dims.d[1];
+        else if (output_dims.nbDims == 2 && output_dims.d[1] == props) count = output_dims.d[0];
 
-	int count = 0;
-	int props = 8;
-	float nms_thresh = 0.5;
-	float conf_thresh = 0.5;
-    std::vector<Detection> detections;
-	if (output_dims.nbDims == 3 && output_dims.d[2] == props) count = output_dims.d[1];
-	else if (output_dims.nbDims == 2 && output_dims.d[1] == props) count = output_dims.d[0];
+        int valid = 0;
+        for (int i = 0; i < count; ++i) {
+            float* det = output.data() + i * props;
+            float confidence = det[4];
+            if (confidence < 0.5f) continue;
 
-    // Confidence thresholding
-    for (int i = 0; i < count; i++) {
-        float* det = &output_buffer[i * props]; // x, y, w, h, conf, class0, class1, class2
-        float obj_conf = det[4];
-
-        if (obj_conf < conf_thresh) continue;
-
-        float* class_scores = &det[5];
-        int class_id = std::max_element(class_scores, class_scores + 3) - class_scores;
-        float class_conf = class_scores[class_id];
-        float final_conf = obj_conf * class_conf;
-        if (final_conf < conf_thresh) continue;
-
-        // Apply rescaling
-        Detection d;
-        d.x = det[0] * scale_x;
-        d.y = det[1] * scale_y;
-        d.w = det[2] * scale_x;
-        d.h = det[3] * scale_y;
-        d.conf = final_conf;
-        d.class_id = class_id;
-        detections.push_back(d);
-    }
-
-    //printf("Number of detections after confidence thresholding: %zu\n", detections.size());
-
-    // NMS
-    std::sort(detections.begin(), detections.end(), [](const Detection& a, const Detection& b){
-        return a.conf > b.conf;
-    });
-
-    std::vector<Detection> results;
-    std::vector<bool> suppressed(detections.size(), false);
-
-    for (size_t i = 0; i < detections.size(); ++i) {
-        if (suppressed[i]) continue;
-        results.push_back(detections[i]);
-        for (size_t j = i + 1; j < detections.size(); ++j) {
-            if (suppressed[j]) continue;
-            if (computeIoU(detections[i], detections[j]) > nms_thresh) suppressed[j] = true;
+            if (valid < 5) {
+                std::cout << "[DEBUG] TL Detection " << i << " - Conf: " << confidence
+                            << ", Box: [" << det[0] << ", " << det[1] << ", " << det[2] << ", " << det[3] << "]" << std::endl;
+            }
+            valid++;
         }
-    }
+       std::cout << "[DEBUG] TL Valid detections above threshold: " << valid << std::endl;
+    
+        float scale_x = frame.cols / static_cast<float>(network_input_w_);
+        float scale_y = frame.rows / static_cast<float>(network_input_h_);
 
-    return results;
+        for (int i = 0; i < count; ++i) {
+            float* det = output.data() + i * props;
+            float confidence = det[4];
+            if (confidence < conf_threshold) continue;
+        
+            // Original detection coordinates at input size (640x640)
+            int x1 = static_cast<int>(det[0] * scale_x);
+            int y1 = static_cast<int>(det[1] * scale_y);
+            int x2 = static_cast<int>(det[2] * scale_x);
+            int y2 = static_cast<int>(det[3] * scale_y);
+        
+            // Clamp to the frame size
+            x1 = std::clamp(x1, 0, frame.cols - 1);
+            y1 = std::clamp(y1, 0, frame.rows - 1);
+            x2 = std::clamp(x2, 0, frame.cols - 1);
+            y2 = std::clamp(y2, 0, frame.rows - 1);
+
+
+            detections.push_back(Rect(Point(x1, y1), Point(x2, y2)));
+        }
+
+    }
+    return detections;
 }
 
-
+int TrafficLights::getInputWidth() const { return network_input_w_; }
+int TrafficLights::getInputHeight() const { return network_input_h_; }

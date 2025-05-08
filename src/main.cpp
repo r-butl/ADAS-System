@@ -31,7 +31,7 @@ int main() {
     
 	// Annotations buffer
 	std::vector<Rect> vCarAnnotations;
-	std::vector<Detection> vTrafficLightsAnnotations;
+	std::vector<Rect> vTrafficLightsAnnotations;
 	std::vector<Rect> vPeopleAnnotations;
 	// lane lines
 
@@ -44,7 +44,6 @@ int main() {
 
       // Detector classes
       TrafficLights trafficLights("./services/tl_detect.onnx");
-
       SimplePeopleDetector peopleDetector("./services/people_detect.onnx");
       CarDetector carsDetector("./cars.xml");
   
@@ -62,8 +61,8 @@ int main() {
 
   
     // Traffic lights service
-    serviceWrapperArgs<Detection> trafficLightsArgs;
-    trafficLightsArgs.processFunction = [&trafficLights](cv::Mat& frame) { return trafficLights.inferenceLoop(frame); };    
+    serviceWrapperArgs<Rect> trafficLightsArgs;
+    trafficLightsArgs.processFunction = [&trafficLights](cv::Mat& frame) { return trafficLights.detect(frame); };    
     trafficLightsArgs.frameBuffer = &frameBuffer;
     trafficLightsArgs.outputStore = &vTrafficLightsAnnotations;
     trafficLightsArgs.frameReadyFlag = &uFrameReadyFlag;
@@ -72,7 +71,7 @@ int main() {
     trafficLightsArgs.stopFlag = &stopFlag;
 
     pthread_t trafficLightsThreadID;
-    pthread_create(&trafficLightsThreadID, nullptr, ServiceWrapperThread<Detection>, &trafficLightsArgs);
+    pthread_create(&trafficLightsThreadID, nullptr, ServiceWrapperThread<Rect>, &trafficLightsArgs);
     setThreadAffinity(trafficLightsThreadID, 1); 
 
     // // Car detection service
