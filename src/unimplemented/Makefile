@@ -5,8 +5,8 @@ CDEFS =
 CFLAGS = -O0 -g $(INCLUDE_DIRS) $(CDEFS)
 
 CUDA_DIR = /usr/local/cuda
-INCLUDE_DIRS = -I/usr/include/opencv4 -I$(CUDA_DIR)/include
-LIBS = -L/usr/lib -lopencv_core -lopencv_flann -lopencv_video -lrt -L$(CUDA_DIR)/lib64 -lcudart -lnvinfer 
+INCLUDE_DIRS = -I/usr/include/opencv4 -I/usr/local/tensorrt/include -I$(CUDA_DIR)/include
+LIBS = -L/usr/local/tensorrt/lib -L/usr/lib -lopencv_core -lopencv_flann -lopencv_video -lrt -L$(CUDA_DIR)/lib64 -lcudart -lnvinfer 
 
 
 HFILES =

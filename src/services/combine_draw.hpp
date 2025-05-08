@@ -26,6 +26,7 @@ struct DrawFrameArgs {
     // annotations
     std::atomic<bool>* stopFlag;
     std::vector<Detection>* trafficLights;
+    std::vector<Rect>* people;
     std::vector<Rect>* cars;
 };
 
@@ -75,6 +76,10 @@ void* DrawFrameThread(void* arg) {
                           cv::Scalar(0, 255, 0), 2); // green boxes, thickness=2
         }
 
+        // draw cars annotations
+        for (const auto& rect: *args->people) {
+            cv::rectangle(frame, rect, cv::Scalar(255, 0, 0), 2); // red boxes, thickness=2
+        }
 
         // draw cars annotations
         for (const auto& rect: *args->cars) {
@@ -107,8 +112,6 @@ void* DrawFrameThread(void* arg) {
         if (cv::waitKey(10) == ESCAPE_KEY) {
             *stopFlag = true;
         }
-
-        std::this_thread::sleep_for(std::chrono::milliseconds(1000)); // Sleep for 1 ms
 
 
     }

@@ -40,16 +40,21 @@ MAIN_SRC = main.cpp
 MAIN_OBJ = $(BUILD_DIR)/main.o
 $(MAIN_OBJ): $(MAIN_SRC) | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
-	
+
+# Build people detector
+PEOPLE_SRC = $(SERVICES_DIR)/people_detect.cpp
+PEOPLE_OBJ = $(BUILD_DIR)/people_detect.o
+$(PEOPLE_OBJ): $(PEOPLE_SRC) | $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
 # Build car
 CAR_SRC = $(SERVICES_DIR)/carDet.cpp
 CAR_OBJ = $(BUILD_DIR)/carDet.o
 $(CAR_OBJ): $(CAR_SRC) | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-
 # Build the executable
-$(SRC_DIR)/adas_app: $(MAIN_OBJ) $(TRAFFIC_LIGHTS_OBJ) $(CAR_OBJ)
+$(SRC_DIR)/adas_app: $(MAIN_OBJ) $(TRAFFIC_LIGHTS_OBJ) $(CAR_OBJ) $(PEOPLE_OBJ)
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 
 # Create build directory if it doesn't exist

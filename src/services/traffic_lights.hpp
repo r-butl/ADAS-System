@@ -35,8 +35,7 @@ private:
     cudaStream_t stream;
     void* buffers[2]; // input , output
     int inputIndex, outputIndex;
-    int inputW = 1088, inputH = 1088;
-    int outputSize = 8400;
+    int inputW = 736, inputH = 736;
 };
 
 #endif // INFERENCE_SERVICE_HPP

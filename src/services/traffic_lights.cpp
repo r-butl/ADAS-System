@@ -151,7 +151,6 @@ std::vector<Detection> TrafficLights::postprocessImage(float* output, int num_de
 	// confidence thresholding	
 	for (int i = 0; i < num_detections; i++) {
 
-
 		for (int i = 0; i < num_detections; ++i) {
 			printf("Detection %d: ", i);
 			for (int j = 0; j < 8; ++j) {
@@ -181,7 +180,7 @@ std::vector<Detection> TrafficLights::postprocessImage(float* output, int num_de
 		detections.push_back(d);
 	}
 
-    printf("Number of detections after confidence thresholding: %zu\n", detections.size());
+    //printf("Number of detections after confidence thresholding: %zu\n", detections.size());
 	// NMS
 	std::sort(detections.begin(), detections.end(), [](const Detection& a, const Detection& b){
 		return a.conf > b.conf;
@@ -215,82 +214,120 @@ float TrafficLights::computeIoU(const Detection& a, const Detection& b){
 	float union_area = a.w * a.h + b.w * b.h - inter_area;
 	return union_area > 0 ? inter_area / union_area : 0.0f;
 }
-
 std::vector<Detection> TrafficLights::inferenceLoop(cv::Mat& frame) {
 
-	// preprocess the image
+    // preprocess the image
     cv::Mat resized, resized_rgb, float_img;
-	//int input_w = 736, input_h = 736;
 
-	if(frame.empty()) {
-		std::cerr << "Error: Empty frame received for inference." << std::endl;
-		return {};
-	}
+    if (frame.empty()) {
+        std::cerr << "Error: Empty frame received for inference." << std::endl;
+        return {};
+    }
 
-	float scale_x = static_cast<float>(frame.cols) / inputW;
-	float scale_y = static_cast<float>(frame.rows) / inputH;
+    // Rescale factors to map to the original frame dimensions
+    float scale_x =  inputW / static_cast<float>(frame.cols);
+    float scale_y =  inputH / static_cast<float>(frame.rows);
 
-	// Yolo Preprcoessing
+    // Yolo Preprocessing
     cv::resize(frame, resized, cv::Size(inputW, inputH));
     cv::cvtColor(resized, resized_rgb, cv::COLOR_BGR2RGB);
     resized_rgb.convertTo(float_img, CV_32FC3, 1.0f / 255.0);
 
+    std::vector<float> gpu_input(3 * inputH * inputW);
 
-	// DEBUG
-	// cv::Mat gray;
-	// cv::cvtColor(float_img, gray, cv::COLOR_RGB2GRAY);
-	// double minVal, maxVal;
-	// cv::Point minLoc, maxLoc;
-	// cv::minMaxLoc(gray, &minVal, &maxVal, &minLoc, &maxLoc);
-	// std::cout << "Min: " << minVal << " Max: " << maxVal << std::endl;
-	
-	std::vector<float> gpu_input(3 * inputH * inputW);
-	
-	// Split channels
-	std::vector<cv::Mat> chw(3);
-	for (int i = 0; i < 3; i++)
-			chw[i] = cv::Mat(inputH, inputW, CV_32FC1, gpu_input.data() + i * inputH * inputW);
-	cv::split(float_img, chw);
+    // Split channels
+    std::vector<cv::Mat> chw(3);
+    for (int i = 0; i < 3; i++) {
+        chw[i] = cv::Mat(inputH, inputW, CV_32FC1, gpu_input.data() + i * inputH * inputW);
+    }
+    cv::split(float_img, chw);
 
-	// Set up the execution context input
-	char const* input_name = "images";
-	assert(engine->getTensorDataType(input_name) == nvinfer1::DataType::kFLOAT);
-	auto input_dims = nvinfer1::Dims4{1, /* channels */ 3, inputH, inputW};
-	context->setInputShape(input_name, input_dims);
-	int input_size = std::accumulate(input_dims.d, input_dims.d + input_dims.nbDims, 1, std::multiplies<int>()) * sizeof(float);
+    // Set up the execution context input
+    char const* input_name = "images";
+    assert(engine->getTensorDataType(input_name) == nvinfer1::DataType::kFLOAT);
+    auto input_dims = nvinfer1::Dims4{1, 3, inputH, inputW};
+    context->setInputShape(input_name, input_dims);
+    int input_size = std::accumulate(input_dims.d, input_dims.d + input_dims.nbDims, 1, std::multiplies<int>()) * sizeof(float);
 
-	// set up the output context
-	char const* output_name = "output0";
+    // Set up the output context
+    char const* output_name = "output0";
+    auto output_dims = context->getTensorShape(output_name);
+    int output_size = std::accumulate(output_dims.d, output_dims.d + output_dims.nbDims, 1, std::multiplies<int>()) * sizeof(float);
 
-	auto output_dims = context->getTensorShape(output_name);
-	int output_size = std::accumulate(output_dims.d, output_dims.d + output_dims.nbDims, 1, std::multiplies<int>()) * sizeof(float);
-	
-	// Allocate memory on the GPU for the operation
-	void* input_mem{nullptr};
-	cudaMalloc(&input_mem, input_size);
-	void* output_mem{nullptr};
-	cudaMalloc(&output_mem, output_size);
+    // Allocate memory on the GPU for the operation
+    void* input_mem{nullptr};
+    cudaMalloc(&input_mem, input_size);
+    void* output_mem{nullptr};
+    cudaMalloc(&output_mem, output_size);
 
-	// set up the cuda stream
-	cudaStream_t stream;
-	cudaStreamCreate(&stream);	
-	cudaMemcpyAsync(input_mem, gpu_input.data(), input_size, cudaMemcpyHostToDevice, stream);
+    // Set up the CUDA stream
+    cudaStream_t stream;
+    cudaStreamCreate(&stream);  
+    cudaMemcpyAsync(input_mem, gpu_input.data(), input_size, cudaMemcpyHostToDevice, stream);
 
-	// Run the inference
-	context->setTensorAddress(input_name, input_mem);
-	context->setTensorAddress(output_name, output_mem);
-	bool status = context->enqueueV3(stream);
-	auto output_buffer = std::unique_ptr<float[]>{new float[output_size / sizeof(float)]};
-	cudaMemcpyAsync(output_buffer.get(), output_mem, output_size, cudaMemcpyDeviceToHost, stream);
-	cudaStreamSynchronize(stream);
+    // Run the inference
+    context->setTensorAddress(input_name, input_mem);
+    context->setTensorAddress(output_name, output_mem);
+    bool status = context->enqueueV3(stream);
+    auto output_buffer = std::unique_ptr<float[]>{new float[output_size / sizeof(float)]};
+    cudaMemcpyAsync(output_buffer.get(), output_mem, output_size, cudaMemcpyDeviceToHost, stream);
+    cudaStreamSynchronize(stream);
 
-	cudaFree(input_mem);
-	cudaFree(output_mem);
-	
-	std::vector<Detection> detections = postprocessImage(output_buffer.get(), 10, 0.3, 0.3, scale_x, scale_y);
+    cudaFree(input_mem);
+    cudaFree(output_mem);
 
-	// Show detections on image, make sure that the annotations are rescaled to the input frame image size
-	return detections;
+	int count = 0;
+	int props = 8;
+	float nms_thresh = 0.5;
+	float conf_thresh = 0.5;
+    std::vector<Detection> detections;
+	if (output_dims.nbDims == 3 && output_dims.d[2] == props) count = output_dims.d[1];
+	else if (output_dims.nbDims == 2 && output_dims.d[1] == props) count = output_dims.d[0];
 
+    // Confidence thresholding
+    for (int i = 0; i < count; i++) {
+        float* det = &output_buffer[i * props]; // x, y, w, h, conf, class0, class1, class2
+        float obj_conf = det[4];
+
+        if (obj_conf < conf_thresh) continue;
+
+        float* class_scores = &det[5];
+        int class_id = std::max_element(class_scores, class_scores + 3) - class_scores;
+        float class_conf = class_scores[class_id];
+        float final_conf = obj_conf * class_conf;
+        if (final_conf < conf_thresh) continue;
+
+        // Apply rescaling
+        Detection d;
+        d.x = det[0] * scale_x;
+        d.y = det[1] * scale_y;
+        d.w = det[2] * scale_x;
+        d.h = det[3] * scale_y;
+        d.conf = final_conf;
+        d.class_id = class_id;
+        detections.push_back(d);
+    }
+
+    //printf("Number of detections after confidence thresholding: %zu\n", detections.size());
+
+    // NMS
+    std::sort(detections.begin(), detections.end(), [](const Detection& a, const Detection& b){
+        return a.conf > b.conf;
+    });
+
+    std::vector<Detection> results;
+    std::vector<bool> suppressed(detections.size(), false);
+
+    for (size_t i = 0; i < detections.size(); ++i) {
+        if (suppressed[i]) continue;
+        results.push_back(detections[i]);
+        for (size_t j = i + 1; j < detections.size(); ++j) {
+            if (suppressed[j]) continue;
+            if (computeIoU(detections[i], detections[j]) > nms_thresh) suppressed[j] = true;
+        }
+    }
+
+    return results;
 }
+
 

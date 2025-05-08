@@ -5,6 +5,7 @@
 #include "services/traffic_lights.hpp"
 #include "service_wrapper.hpp"
 #include "services/combine_draw.hpp"
+#include "services/people_detect.hpp"
 #include <string>
 
 #define ESCAPE_KEY (27)
@@ -23,7 +24,6 @@ void setThreadAffinity(pthread_t thread, int core_id) {
 }
 
 int main() {
-    std::cout << "Starting frame reader service..." << std::endl;
 
     // Global variables
     cv::Mat currentFrame;
@@ -32,7 +32,7 @@ int main() {
 	// Annotations buffer
 	std::vector<Rect> vCarAnnotations;
 	std::vector<Detection> vTrafficLightsAnnotations;
-	// pedestrians
+	std::vector<Rect> vPeopleAnnotations;
 	// lane lines
 
     // Sequencer flags
@@ -42,20 +42,26 @@ int main() {
     // Read frame thread
     cv::Mat frameBuffer;
 
+      // Detector classes
+      TrafficLights trafficLights("./services/tl_detect.onnx");
+
+      SimplePeopleDetector peopleDetector("./services/people_detect.onnx");
+      CarDetector carsDetector("./cars.xml");
+  
+
     FrameReaderArgs frameReaderArgs;
     frameReaderArgs.frameBuffer = &frameBuffer;
-    frameReaderArgs.source = "../../validate_video.mp4";
+    frameReaderArgs.source = "../../video.mp4";
     frameReaderArgs.frameReadyFlag = &uFrameReadyFlag;
-    frameReaderArgs.numServices = 3;     // 4                        // CRITICAL: needs to be # of annotation services + 1 draw service
+    frameReaderArgs.numServices = 4;     // 4                        // CRITICAL: needs to be # of annotation services + 1 draw service
     frameReaderArgs.stopFlag = &stopFlag;
 
     pthread_t frameReaderThreadID;
     pthread_create(&frameReaderThreadID, nullptr, frameReaderThread, &frameReaderArgs);
     setThreadAffinity(frameReaderThreadID, 0); 
 
+  
     // Traffic lights service
-    std::string engine_path = "./services/tl_detect.onnx";
-    TrafficLights trafficLights(engine_path);
     serviceWrapperArgs<Detection> trafficLightsArgs;
     trafficLightsArgs.processFunction = [&trafficLights](cv::Mat& frame) { return trafficLights.inferenceLoop(frame); };    
     trafficLightsArgs.frameBuffer = &frameBuffer;
@@ -70,9 +76,8 @@ int main() {
     setThreadAffinity(trafficLightsThreadID, 1); 
 
     // // Car detection service
-    CarDetector detector("./cars.xml");
     serviceWrapperArgs<cv::Rect> carDetectionArgs;
-    carDetectionArgs.processFunction = [&detector](cv::Mat& frame) { return detector.detectCars(frame); };
+    carDetectionArgs.processFunction = [&carsDetector](cv::Mat& frame) { return carsDetector.detectCars(frame); };
     carDetectionArgs.frameBuffer = &frameBuffer;
     carDetectionArgs.outputStore = &vCarAnnotations;
     carDetectionArgs.frameReadyFlag = &uFrameReadyFlag;
@@ -85,19 +90,19 @@ int main() {
     setThreadAffinity(carDetectionThreadID, 2);
 
     // // // Pedestrains detection service
-    // CarDetector detector("./cars.xml");
-    // serviceWrapperArgs<cv::Rect> carDetectionArgs;
-    // carDetectionArgs.processFunction = [&detector](cv::Mat& frame) { return detector.detectCars(frame); };
-    // carDetectionArgs.frameBuffer = &frameBuffer;
-    // carDetectionArgs.outputStore = &vCarAnnotations;
-    // carDetectionArgs.frameReadyFlag = &uFrameReadyFlag;
-    // carDetectionArgs.processingDoneFlag = &uProcessingDoneFlag;
-    // carDetectionArgs.activeBit = 0x04;                // Need to be unique bit for each service
-    // carDetectionArgs.stopFlag = &stopFlag;
+    serviceWrapperArgs<cv::Rect> peopleDetectionArgs;
+    peopleDetectionArgs.processFunction = [&peopleDetector](cv::Mat& frame) { return peopleDetector.detect(frame); };
+    peopleDetectionArgs.frameBuffer = &frameBuffer;
+    peopleDetectionArgs.outputStore = &vPeopleAnnotations;
+    peopleDetectionArgs.frameReadyFlag = &uFrameReadyFlag;
+    peopleDetectionArgs.processingDoneFlag = &uProcessingDoneFlag;
+    peopleDetectionArgs.activeBit = 0x04;                // Need to be unique bit for each service
+    peopleDetectionArgs.stopFlag = &stopFlag;
 
-    // pthread_t carDetectionThreadID;
-    // pthread_create(&carDetectionThreadID, nullptr, ServiceWrapperThread<cv::Rect>, &carDetectionArgs);
-    // setThreadAffinity(carDetectionThreadID, 2);
+    pthread_t peopleDetectionThreadID;
+    pthread_create(&peopleDetectionThreadID, nullptr, ServiceWrapperThread<cv::Rect>, &peopleDetectionArgs);
+    setThreadAffinity(peopleDetectionThreadID, 3);
+
 
   // Draw frame service
     DrawFrameArgs drawFrameArgs;
@@ -105,15 +110,16 @@ int main() {
     drawFrameArgs.windowName = "Annotated Frame";
     drawFrameArgs.frameReadyFlag = &uFrameReadyFlag;
     drawFrameArgs.processingDoneFlag = &uProcessingDoneFlag;
-    drawFrameArgs.activeBit = 0x04;     // 0x08   // Need to be unique bit for each service    
-    drawFrameArgs.numServices = 2;      // 3   // CRITICAL: needs to be # of annotation services
+    drawFrameArgs.activeBit = 0x08;     // 0x08   // Need to be unique bit for each service    
+    drawFrameArgs.numServices = 3;      // 3   // CRITICAL: needs to be # of annotation services
     drawFrameArgs.stopFlag = &stopFlag;
     drawFrameArgs.trafficLights = &vTrafficLightsAnnotations;
+    drawFrameArgs.people = &vPeopleAnnotations;
     drawFrameArgs.cars = &vCarAnnotations;
 
     pthread_t drawFrameThreadID;
     pthread_create(&drawFrameThreadID, nullptr, DrawFrameThread, &drawFrameArgs);
-    setThreadAffinity(drawFrameThreadID, 3); // Bind to core 0
+    setThreadAffinity(drawFrameThreadID, 4); // Bind to core 0
 
     while (true) {
         continue;

@@ -240,6 +240,8 @@ int main(int argc, char** argv) {
             if (out_dims.nbDims == 3 && out_dims.d[2] == props) count = out_dims.d[1];
             else if (out_dims.nbDims == 2 && out_dims.d[1] == props) count = out_dims.d[0];
 
+            printf("Outdims: ", out_dims);
+
             int valid = 0;
             for (int i = 0; i < count; ++i) {
                 float* det = output.data() + i * props;
