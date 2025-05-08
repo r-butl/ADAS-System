@@ -250,13 +250,13 @@ std::vector<cv::Rect> TrafficLights::detect(const Mat& frame) {
             float confidence = det[4];
             if (confidence < 0.5f) continue;
 
-            if (valid < 5) {
-                std::cout << "[DEBUG] TL Detection " << i << " - Conf: " << confidence
-                            << ", Box: [" << det[0] << ", " << det[1] << ", " << det[2] << ", " << det[3] << "]" << std::endl;
-            }
+            // if (valid < 5) {
+            //     std::cout << "[DEBUG] TL Detection " << i << " - Conf: " << confidence
+            //                 << ", Box: [" << det[0] << ", " << det[1] << ", " << det[2] << ", " << det[3] << "]" << std::endl;
+            // }
             valid++;
         }
-       std::cout << "[DEBUG] TL Valid detections above threshold: " << valid << std::endl;
+       //std::cout << "[DEBUG] TL Valid detections above threshold: " << valid << std::endl;
     
         float scale_x = frame.cols / static_cast<float>(network_input_w_);
         float scale_y = frame.rows / static_cast<float>(network_input_h_);

@@ -112,8 +112,6 @@ void* DrawFrameThread(void* arg) {
             *stopFlag = true;
         }
 
-        cv::waitKey(1000);
-
     }
 
     cv::destroyWindow(windowName);
