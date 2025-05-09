@@ -23,7 +23,7 @@ void setThreadAffinity(pthread_t thread, int core_id) {
     }
 }
 
-int main() {
+int main(int argc, char** argv) {
 
     // Global variables
     cv::Mat currentFrame;
@@ -47,10 +47,16 @@ int main() {
       SimplePeopleDetector peopleDetector("./services/people_detect.onnx");
       CarDetector carsDetector("./cars.xml");
   
-
+	      
     FrameReaderArgs frameReaderArgs;
     frameReaderArgs.frameBuffer = &frameBuffer;
-    frameReaderArgs.source = "../../validate_video.mp4";
+
+	if (argc > 1) {
+		frameReaderArgs.source = argv[1];
+	} else {
+		frameReaderArgs.source = "0";
+	}
+
     frameReaderArgs.frameReadyFlag = &uFrameReadyFlag;
     frameReaderArgs.numServices = 4;     // 4                        // CRITICAL: needs to be # of annotation services + 1 draw service
     frameReaderArgs.stopFlag = &stopFlag;
