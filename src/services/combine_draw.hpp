@@ -77,55 +77,55 @@ void* DrawFrameThread(void* arg) {
 
         /////////////////////////// Annotations ///////////////////////////
 
-        // Draw traffic lights annotations
-        for (const auto& rect : *args->trafficLights) {
-                cv::rectangle(frame, rect, cv::Scalar(0, 255, 0), 2); // red boxes, thickness=2
-            }
+        // // Draw traffic lights annotations
+        // for (const auto& rect : *args->trafficLights) {
+        //         cv::rectangle(frame, rect, cv::Scalar(0, 255, 0), 2); // red boxes, thickness=2
+        //     }
     
 
-        // draw people annotations
-        for (const auto& rect: *args->people) {
-            cv::rectangle(frame, rect, cv::Scalar(255, 0, 0), 2); // red boxes, thickness=2
-        }
-
-        // draw cars annotations
-        for (const auto& rect: *args->cars) {
-            cv::rectangle(frame, rect, cv::Scalar(0, 0, 255), 2); // red boxes, thickness=2
-        }
-
-        // Drawing
-        for (int i=0; i < 2; i++){
-            cv::Vec4i line = (*args->laneLinePoints)[i];
-            cv::Point p1(line[0], line[1]);
-            cv::Point p2(line[2], line[3]);
-            cv::line(frame, p1, p2, cv::Scalar(255, 255, 0), 3);
-        }
-
-        // #pragma omp parallel sections
-        // {
-        //     #pragma omp section
-        //     for (const auto& rect : *args->trafficLights) {
-        //         cv::rectangle(frame, rect, cv::Scalar(0, 255, 0), 2);
-        //     }
-
-        //     #pragma omp section
-        //     for (const auto& rect : *args->people) {
-        //         cv::rectangle(frame, rect, cv::Scalar(255, 0, 0), 2);
-        //     }
-
-        //     #pragma omp section
-        //     for (const auto& rect : *args->cars) {
-        //         cv::rectangle(frame, rect, cv::Scalar(0, 0, 255), 2);
-        //     }
-
-        //     #pragma omp section
-        //     for (int i = 0; i < 2; i++) {
-        //         cv::Vec4i line = (*args->laneLinePoints)[i];
-        //         cv::Point p1(line[0], line[1]);
-        //         cv::Point p2(line[2], line[3]);
-        //         cv::line(frame, p1, p2, cv::Scalar(255, 255, 0), 3);
-        //     }
+        // // draw people annotations
+        // for (const auto& rect: *args->people) {
+        //     cv::rectangle(frame, rect, cv::Scalar(255, 0, 0), 2); // red boxes, thickness=2
         // }
+
+        // // draw cars annotations
+        // for (const auto& rect: *args->cars) {
+        //     cv::rectangle(frame, rect, cv::Scalar(0, 0, 255), 2); // red boxes, thickness=2
+        // }
+
+        // // Drawing
+        // for (int i=0; i < 2; i++){
+        //     cv::Vec4i line = (*args->laneLinePoints)[i];
+        //     cv::Point p1(line[0], line[1]);
+        //     cv::Point p2(line[2], line[3]);
+        //     cv::line(frame, p1, p2, cv::Scalar(255, 255, 0), 3);
+        // }
+
+        #pragma omp parallel sections
+        {
+            #pragma omp section
+            for (const auto& rect : *args->trafficLights) {
+                cv::rectangle(frame, rect, cv::Scalar(0, 255, 0), 2);
+            }
+
+            #pragma omp section
+            for (const auto& rect : *args->people) {
+                cv::rectangle(frame, rect, cv::Scalar(255, 0, 0), 2);
+            }
+
+            #pragma omp section
+            for (const auto& rect : *args->cars) {
+                cv::rectangle(frame, rect, cv::Scalar(0, 0, 255), 2);
+            }
+
+            #pragma omp section
+            for (int i = 0; i < 2; i++) {
+                cv::Vec4i line = (*args->laneLinePoints)[i];
+                cv::Point p1(line[0], line[1]);
+                cv::Point p2(line[2], line[3]);
+                cv::line(frame, p1, p2, cv::Scalar(255, 255, 0), 3);
+            }
+        }
 
         ////////////////////////// End Annotations ///////////////////////////
 

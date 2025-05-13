@@ -25,14 +25,14 @@ std::vector<cv::Vec4i> laneDetection(Mat& frame) {
     Point pts[4] = {
         Point(0, h), Point(w, h),
         Point(int(w * 0.6), int(h * 0.6)),
-        Point(int(w * 0.4), int(h * 0.6))
+        Point(int(w * 0.4), int(h * 0.7))
     };
     fillPoly(mask, vector<vector<Point>>{vector<Point>(pts, pts + 4)}, Scalar(255));
     bitwise_and(edges, mask, roiEdges);
 
     // 3) Hough lines
     vector<Vec4i> lines;
-    HoughLinesP(roiEdges, lines, 2, CV_PI/180, 50, 50, 10);
+    HoughLinesP(roiEdges, lines, 1, CV_PI/180, 100, 100, 5);
 
     // 4) Separate left/right by slope
     vector<Vec4i> leftL, rightL;
@@ -86,8 +86,8 @@ std::vector<cv::Vec4i> laneDetection(Mat& frame) {
     };
 
     Point2f lb, lt, rb, rt;
-    bool gotLeft = fitSide(leftL, lb, lt, 0.6f);
-    bool gotRight = fitSide(rightL, rb, rt, 0.6f);
+    bool gotLeft = fitSide(leftL, lb, lt, 0.8f);
+    bool gotRight = fitSide(rightL, rb, rt, 0.8f);
 
     if (!gotLeft) {
         lb = Point2f(0, h);
@@ -95,7 +95,7 @@ std::vector<cv::Vec4i> laneDetection(Mat& frame) {
     }
     if (!gotRight) {
         rb = Point2f(w, h);
-        rt = Point2f(w * 0.6f, h * 0.6f);
+        rt = Point2f(w * 0.4f, h * 0.6f);
     }
 
     // 6) Temporal smoothing
