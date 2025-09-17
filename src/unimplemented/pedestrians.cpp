@@ -1,1 +1,0 @@
-// This service implements pedestrian detection and tracking
